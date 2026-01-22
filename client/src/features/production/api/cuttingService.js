@@ -1,0 +1,20 @@
+import apiClient from '@/lib/apiClient';
+
+const cuttingService = {
+    getOrders: async () => {
+        const response = await apiClient.get('/cutting/orders');
+        return response.data;
+    },
+
+    getOrderDetails: async (orderId) => {
+        const response = await apiClient.get(`/cutting/orders/${orderId}`);
+        return response.data;
+    },
+
+    saveCutting: async (orderId, data) => {
+        const response = await apiClient.post(`/cutting/orders/${orderId}/cutting`, data);
+        return response.data;
+    }
+};
+
+export default cuttingService;
