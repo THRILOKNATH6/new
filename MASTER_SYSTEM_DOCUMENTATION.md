@@ -238,12 +238,16 @@ CREATE TABLE employees (
     department_id INTEGER REFERENCES departments(department_id),
     block_id INTEGER REFERENCES blocks(block_id),
     shift_no INTEGER REFERENCES shifts(shift_no),
-    working_line_no INTEGER REFERENCES lines(line_no),
+    working_line_no INTEGER REFERENCES lines(line_no), -- 0 indicates Multi-Line (see Section 8)
+    assigned_operation_id INTEGER,                   -- 0 indicates Multi-Operation (see Section 8)
     date_of_join DATE,
     address TEXT,
     status VARCHAR(20) DEFAULT 'ACTIVE'  -- ACTIVE, INACTIVE
 );
 ```
+
+**ZERO-VALUE INDICATORS**:
+A value of **0** in `working_line_no` or `assigned_operation_id` signals that the employee is assigned to multiple entities. Detailed assignments must be fetched from the `multi_work` table.
 
 **INDEXES**:
 - `idx_emp_line` on `working_line_no`
@@ -737,7 +741,52 @@ IT Manager deletes order
 
 ---
 
-## 7. LINE & PRODUCTION FLOW
+## 8. MULTI-WORK ALLOCATION (EXTENSION)
+
+### 8.1 Concept & Purpose
+The system supports employees working across multiple lines or performing multiple style operations simultaneously. This is implemented via a **Zero-Value Indicator** rule and a dedicated extension table.
+
+### 8.2 Business Rules & Eligibility
+Eligibility for multi-work is strictly controlled by **Designation Level**:
+
+| Designation Level | Multi-Line Support | Multi-Operation Support |
+| :--- | :--- | :--- |
+| **Below 7** (High Hierarchy) | ✅ YES | ❌ NO |
+| **7 and Above** (Floor Staff) | ✅ YES | ✅ YES |
+
+*   **Designation Level Check**: Read from `designations.designation_level`.
+*   **Example**: Managers (Level 2) can manage multiple lines but only one primary operation. Operators (Level 10) can be assigned multiple operations for load balancing.
+
+### 8.3 Technical Implementation
+
+**`multi_work`** - Extension for Multi-Assignment
+```sql
+CREATE TABLE multi_work (
+    emp_id VARCHAR(20) PRIMARY KEY REFERENCES employees(emp_id),
+    multi_lines INTEGER[],        -- Array of Line Numbers
+    multi_operations INTEGER[],   -- Array of Operation IDs
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+**The Zero-Value Rule**:
+1.  If an employee is assigned to >1 line, set `employees.working_line_no = 0`.
+2.  If an employee is assigned to >1 operation, set `employees.assigned_operation_id = 0`.
+3.  Actual values are stored in `multi_work.multi_lines` and `multi_work.multi_operations`.
+
+### 8.4 Logic Flow
+-   **Insert/Update**: When assigning multiple targets, the service layer sets primary columns to `0` and upserts the `multi_work` record. If reverting to single assignment, the `multi_work` record is cleared.
+-   **Read**: Queries must join with `multi_work` or use `EXISTS` subqueries when encountering a `0` value to retrieve the full scope of employee assignments.
+
+### 8.5 Modified Files
+-   `server/src/repositories/ie/multiWorkRepo.js` (New)
+-   `server/src/repositories/ie/lineRepo.js` (Enhanced queries)
+-   `server/src/repositories/ie/ieRepo.js` (Updated assignment logic)
+-   `server/src/services/ie/ieService.js` (Enforced business rules)
+
+---
+
+## 9. CUTTING & PRODUCTION FLOW
 
 ### 7.1 Line Management
 
@@ -1143,7 +1192,7 @@ try {
 ### 12.1 Database Schema Invariants
 
 **NEVER CHANGE**:
-1. Dynamic table naming convention: `order_qty_{category}`, `size_{category}_op_sam_seam`
+1. Dynamic table naming convention: `order_qty_{category}`, `size_{category}_op_sam_seam`, `loading_{category}`
 2. Size column data type: MUST be INTEGER
 3. Audit field names: `created_by`, `last_changed_by`, `created_at`, `updated_at`
 4. Primary key types (order_id, emp_id, etc.)
@@ -1207,6 +1256,7 @@ try {
 2. System auto-creates:
    - `order_qty_{category}` table
    - `size_{category}_op_sam_seam` table
+   - `loading_{category}` table
 3. No manual table creation needed
 
 ### 13.4 Adding a New Module
@@ -1349,6 +1399,7 @@ npm run build && npm run preview  # Production
 
 **Version History**:
 - v1.0 (2026-01-20): Initial comprehensive documentation
+- v1.1 (2026-01-26): Extended with Multi-Work Allocation support (Section 8)
 
 ---
 

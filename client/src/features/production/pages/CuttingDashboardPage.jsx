@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, FileText, ChevronRight } from 'lucide-react';
+import { Search, FileText, ChevronRight, Filter } from 'lucide-react';
 import cuttingService from '../api/cuttingService';
+import AdvancedSearchModal from '../components/AdvancedSearchModal';
 
 const CuttingDashboardPage = () => {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -29,6 +31,10 @@ const CuttingDashboardPage = () => {
         o.style_id.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
+    const handleOrderSelect = (order) => {
+        navigate(`/dashboard/production/cutting/${order.order_id}`);
+    };
+
     if (loading) return <div className="p-8 text-center text-slate-500 font-bold">Loading available orders...</div>;
 
     return (
@@ -40,15 +46,24 @@ const CuttingDashboardPage = () => {
                 </div>
             </header>
 
-            <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                <input
-                    type="text"
-                    placeholder="Search by Order ID, Buyer, or Style..."
-                    className="w-full bg-white border border-slate-300 rounded py-2 pl-10 pr-4 text-[12px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 transition-none"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                />
+            <div className="flex gap-2">
+                <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                    <input
+                        type="text"
+                        placeholder="Search by Order ID, Buyer, or Style..."
+                        className="w-full bg-white border border-slate-300 rounded py-2 pl-10 pr-4 text-[12px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 transition-none"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
+                <button
+                    onClick={() => setShowAdvancedSearch(true)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center gap-2 text-[12px] font-medium"
+                >
+                    <Filter size={14} />
+                    Advanced Search
+                </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
@@ -90,6 +105,23 @@ const CuttingDashboardPage = () => {
                                     <span className="text-[10px] text-slate-400 font-bold uppercase">Total Qty</span>
                                     <span className="text-slate-800 font-black text-[13px]">{order.order_quantity}</span>
                                 </div>
+                                {order.cutting_completion_percentage !== undefined && (
+                                    <div className="pt-1 border-t border-slate-200 flex justify-between items-center">
+                                        <span className="text-[10px] text-slate-400 font-bold uppercase">Cutting</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className={`text-[13px] font-black ${
+                                                order.cutting_completion_percentage >= 100 ? 'text-green-600' : 'text-blue-600'
+                                            }`}>
+                                                {order.cutting_completion_percentage}%
+                                            </span>
+                                            {order.cutting_completion_percentage >= 100 && (
+                                                <span className="px-2 py-0.5 bg-green-100 text-green-700 text-[10px] font-bold rounded-full">
+                                                    Complete
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     ))
@@ -99,6 +131,13 @@ const CuttingDashboardPage = () => {
                     </div>
                 )}
             </div>
+
+            {/* Advanced Search Modal */}
+            <AdvancedSearchModal
+                isOpen={showAdvancedSearch}
+                onClose={() => setShowAdvancedSearch(false)}
+                onOrderSelect={handleOrderSelect}
+            />
         </div>
     );
 };

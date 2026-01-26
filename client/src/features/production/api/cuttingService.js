@@ -14,6 +14,11 @@ const cuttingService = {
     saveCutting: async (orderId, data) => {
         const response = await apiClient.post(`/cutting/orders/${orderId}/cutting`, data);
         return response.data;
+    },
+
+    searchOrders: async (searchParams) => {
+        const response = await apiClient.get('/cutting/orders/search', { params: searchParams });
+        return response.data;
     }
 };
 

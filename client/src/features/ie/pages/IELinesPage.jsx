@@ -22,6 +22,11 @@ export default function IELinesPage() {
     const [lineOperations, setLineOperations] = useState([]);
     const [drillDownModal, setDrillDownModal] = useState(null);
     const [opsLoading, setOpsLoading] = useState(false);
+    const [staffSearch, setStaffSearch] = useState('');
+    const [allocatableStaff, setAllocatableStaff] = useState([]);
+
+    // Dropdown toggle state
+    const [activeDropdown, setActiveDropdown] = useState(null);
 
     // Form State
     const [formData, setFormData] = useState({
@@ -29,10 +34,10 @@ export default function IELinesPage() {
         line_name: '',
         status: 'ACTIVE',
         running_style_id: '',
-        line_supervisor_id: '',
-        line_ie_id: '',
-        line_qc_id: '',
-        line_feeding_helper_id: '',
+        line_supervisor_id: [],
+        line_ie_id: [],
+        line_qc_id: [],
+        line_feeding_helper_id: [],
         line_mechanic_id: ''
     });
 
@@ -56,17 +61,18 @@ export default function IELinesPage() {
 
     const loadStaffData = async (lineNo) => {
         try {
-            const [lineData, unassignedData] = await Promise.all([
+            const [lineData, allocatableData] = await Promise.all([
                 ieAPI.getLineStaff(lineNo),
-                ieAPI.getUnassignedStaff()
+                ieAPI.getUnassignedStaff() // This now returns our allocatable pool (>7 Prod)
             ]);
             setLineStaff(lineData || []);
-            setUnassignedStaff(unassignedData || []);
+            setAllocatableStaff(allocatableData || []);
         } catch (e) { console.error(e); }
     };
 
     const handleOpenStaffPanel = (l) => {
         setActiveLineItem(l);
+        setStaffSearch('');
         loadStaffData(l.lineInfo.line_no);
         setStaffPanelOpen(true);
     };
@@ -75,7 +81,7 @@ export default function IELinesPage() {
         try {
             const data = await ieAPI.getLineManpower(l.lineInfo.line_no);
             setDrillDownModal(data);
-            setActiveLineItem(l); // Ensure context is preserved for edits
+            setActiveLineItem(l);
         } catch (e) { alert('Failed to load detail'); }
     };
 
@@ -146,15 +152,19 @@ export default function IELinesPage() {
 
     const handleEditLine = (l) => {
         setEditingLine(l.lineInfo.line_no);
+        const pool = masters.roleStaff || {};
+        const getAssignedIds = (staffList = []) =>
+            staffList.filter(s => s.working_line_no === l.lineInfo.line_no).map(s => s.emp_id);
+
         setFormData({
             line_no: l.lineInfo.line_no,
             line_name: l.lineInfo.line_name,
             status: l.lineInfo.status,
             running_style_id: l.runningStyle.style_id || '',
-            line_supervisor_id: l.responsiblePersons.supervisor?.id || '',
-            line_ie_id: l.responsiblePersons.ie?.id || '',
-            line_qc_id: l.responsiblePersons.qc?.id || '',
-            line_feeding_helper_id: l.responsiblePersons.feedingHelper?.id || '',
+            line_supervisor_id: getAssignedIds(pool.supervisors),
+            line_ie_id: getAssignedIds(pool.ie),
+            line_qc_id: getAssignedIds(pool.qc),
+            line_feeding_helper_id: getAssignedIds(pool.feedingHelpers),
             line_mechanic_id: l.responsiblePersons.mechanic?.id || ''
         });
         setModalOpen(true);
@@ -179,7 +189,6 @@ export default function IELinesPage() {
 
         return (
             <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm hover:shadow-xl hover:translate-y-[-4px] transition-all flex flex-col overflow-hidden h-[420px] flex-shrink-0">
-                {/* Header */}
                 <div className="p-5 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-black text-sm shadow-lg shadow-indigo-100">
@@ -196,7 +205,6 @@ export default function IELinesPage() {
                     <button onClick={() => handleEditLine(l)} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-white rounded-xl transition-all"><Edit2 size={14} /></button>
                 </div>
 
-                {/* Running Style */}
                 <div className="p-5 bg-indigo-50/30 border-b border-gray-50">
                     <div className="flex items-center gap-2 mb-3">
                         <Tag size={10} className="text-indigo-600" />
@@ -216,7 +224,6 @@ export default function IELinesPage() {
                     )}
                 </div>
 
-                {/* Responsible Persons */}
                 <div className="px-5 py-4 border-b border-gray-50 space-y-2 flex-grow overflow-y-auto no-scrollbar">
                     <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-2">
                         <Award size={10} /> Resource Command
@@ -237,7 +244,6 @@ export default function IELinesPage() {
                     ))}
                 </div>
 
-                {/* Manpower Summary */}
                 <div onClick={() => handleOpenDrillDown(l)} className="px-5 py-4 cursor-pointer hover:bg-gray-50 transition-colors group">
                     <div className="flex justify-between items-center mb-1">
                         <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Manpower Overview</span>
@@ -270,7 +276,6 @@ export default function IELinesPage() {
 
     return (
         <div className="p-6 sm:p-10 space-y-10 max-w-[1600px] mx-auto animate-in fade-in duration-500">
-            {/* Header */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-6 bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
                 <div className="flex items-center gap-6">
                     <div className="p-4 bg-indigo-600 rounded-[1.5rem] text-white shadow-xl shadow-indigo-100">
@@ -282,14 +287,27 @@ export default function IELinesPage() {
                     </div>
                 </div>
                 <button
-                    onClick={() => { setEditingLine(null); setFormData({ line_no: '', line_name: '', status: 'ACTIVE', running_style_id: '', line_supervisor_id: '', line_ie_id: '', line_qc_id: '', line_feeding_helper_id: '', line_mechanic_id: '' }); setModalOpen(true); }}
+                    onClick={() => {
+                        setEditingLine(null);
+                        setFormData({
+                            line_no: '',
+                            line_name: '',
+                            status: 'ACTIVE',
+                            running_style_id: '',
+                            line_supervisor_id: [],
+                            line_ie_id: [],
+                            line_qc_id: [],
+                            line_feeding_helper_id: [],
+                            line_mechanic_id: ''
+                        });
+                        setModalOpen(true);
+                    }}
                     className="bg-gray-950 hover:bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black text-sm flex items-center gap-2 transition-all shadow-xl shadow-gray-200 active:scale-95"
                 >
                     <Plus size={20} /> Initialize New Line
                 </button>
             </div>
 
-            {/* Grid */}
             {loading ? (
                 <div className="h-64 flex items-center justify-center">
                     <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
@@ -300,7 +318,6 @@ export default function IELinesPage() {
                 </div>
             )}
 
-            {/* Line Modal */}
             {modalOpen && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setModalOpen(false)} />
@@ -322,8 +339,8 @@ export default function IELinesPage() {
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">System Status</label>
                                     <select value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })} className="w-full bg-gray-50 border border-gray-100 p-4 rounded-2xl text-sm font-bold outline-none">
                                         <option value="ACTIVE">ACTIVE</option>
-                                        <option value="IDLE">IDLE</option>
-                                        <option value="STOPPED">STOPPED</option>
+                                        <option value="MAINTENANCE">MAINTENANCE</option>
+                                        <option value="CLOSED">CLOSED</option>
                                     </select>
                                 </div>
                             </div>
@@ -341,29 +358,84 @@ export default function IELinesPage() {
 
                             <div className="space-y-4 pt-6 border-t border-gray-100">
                                 <div className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-2 flex items-center gap-2">
-                                    <Award size={14} /> Responsible Persons
+                                    <Award size={14} /> Responsible Persons (Multi-select)
                                 </div>
-                                {[
-                                    { id: 'line_supervisor_id', label: 'Line Supervisor' },
-                                    { id: 'line_ie_id', label: 'Process IE' },
-                                    { id: 'line_qc_id', label: 'QC Lead' },
-                                    { id: 'line_feeding_helper_id', label: 'Feeding Helper' },
-                                    { id: 'line_mechanic_id', label: 'Maintenance Mechanic' }
+
+                                {[{ id: 'line_supervisor_id', label: 'Line Supervisors', pool: masters.roleStaff?.supervisors, icon: <Award size={14} /> },
+                                { id: 'line_ie_id', label: 'IE Team', pool: masters.roleStaff?.ie, icon: <Settings2 size={14} /> },
+                                { id: 'line_qc_id', label: 'QC Team', pool: masters.roleStaff?.qc, icon: <OperationIcon size={14} /> },
+                                { id: 'line_feeding_helper_id', label: 'Feeding Helpers', pool: masters.roleStaff?.feedingHelpers, icon: <Users size={14} /> }
                                 ].map(role => (
-                                    <div key={role.id} className="space-y-1.5 px-2">
-                                        <div className="flex justify-between items-center">
-                                            <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{role.label}</label>
-                                        </div>
-                                        <select
-                                            value={formData[role.id]}
-                                            onChange={e => setFormData({ ...formData, [role.id]: e.target.value })}
-                                            className="w-full bg-gray-50 border border-gray-100 p-3 rounded-2xl text-xs font-bold outline-none focus:bg-white transition-colors"
+                                    <div key={role.id} className="space-y-2 px-2 relative">
+                                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest pl-1">{role.label}</label>
+
+                                        <div
+                                            onClick={() => setActiveDropdown(activeDropdown === role.id ? null : role.id)}
+                                            className={`w-full bg-gray-50 border ${activeDropdown === role.id ? 'border-indigo-500 ring-2 ring-indigo-500/10' : 'border-gray-100'} p-4 rounded-2xl flex justify-between items-center cursor-pointer transition-all hover:bg-white`}
                                         >
-                                            <option value="">Not Assigned</option>
-                                            {staffPool.map(s => <option key={s.emp_id} value={s.emp_id}>{s.name} ({s.designation_name})</option>)}
-                                        </select>
+                                            <div className="flex items-center gap-2">
+                                                <div className="text-indigo-600">{role.icon}</div>
+                                                <span className="text-xs font-bold text-gray-700">
+                                                    {formData[role.id]?.length ? `${formData[role.id].length} Selected` : 'Select Personnel'}
+                                                </span>
+                                            </div>
+                                            <ChevronRight className={`text-gray-400 transition-transform duration-300 ${activeDropdown === role.id ? 'rotate-90' : ''}`} size={18} />
+                                        </div>
+
+                                        {activeDropdown === role.id && (
+                                            <div className="absolute left-2 right-2 top-full mt-2 z-[200] bg-white rounded-[2rem] shadow-2xl border border-gray-100 p-4 max-h-60 overflow-y-auto no-scrollbar animate-in slide-in-from-top-2 duration-200">
+                                                {role.pool?.map(s => (
+                                                    <label key={s.emp_id} className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-2xl cursor-pointer group transition-colors">
+                                                        <input
+                                                            type="checkbox"
+                                                            className="w-4 h-4 rounded-md border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                                            checked={formData[role.id]?.includes(s.emp_id)}
+                                                            onChange={(e) => {
+                                                                const current = formData[role.id] || [];
+                                                                if (e.target.checked) setFormData({ ...formData, [role.id]: [...current, s.emp_id] });
+                                                                else setFormData({ ...formData, [role.id]: current.filter(id => id !== s.emp_id) });
+                                                            }}
+                                                        />
+                                                        <div className="flex flex-col min-w-0">
+                                                            <span className="text-[11px] font-black text-gray-800 truncate">{s.name}</span>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-[9px] text-gray-400 font-bold">ID: {s.emp_id}</span>
+                                                                {s.working_line_no && s.working_line_no !== parseInt(editingLine) && (
+                                                                    <span className="bg-amber-50 text-amber-600 text-[7px] px-1.5 py-0.5 rounded-lg font-black uppercase tracking-tighter shadow-sm border border-amber-50">Line {s.working_line_no}</span>
+                                                                )}
+                                                                {s.working_line_no === parseInt(editingLine) && (
+                                                                    <span className="bg-emerald-50 text-emerald-600 text-[7px] px-1.5 py-0.5 rounded-lg font-black uppercase tracking-tighter shadow-sm border border-emerald-50">Active</span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </label>
+                                                ))}
+                                                {(!role.pool || role.pool.length === 0) && <p className="text-[10px] text-gray-300 italic p-4 text-center font-bold">No available personnel</p>}
+                                            </div>
+                                        )}
                                     </div>
                                 ))}
+
+                                <div className="space-y-2 px-2">
+                                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest pl-1">Maintenance Mechanic</label>
+                                    <div className="relative">
+                                        <select
+                                            value={formData.line_mechanic_id}
+                                            onChange={e => setFormData({ ...formData, line_mechanic_id: e.target.value })}
+                                            className="w-full bg-gray-50 border border-gray-100 p-4 rounded-2xl text-xs font-bold outline-none focus:bg-white transition-all appearance-none cursor-pointer pr-10"
+                                        >
+                                            <option value="">Not Assigned</option>
+                                            {masters.roleStaff?.mechanics?.map(s => (
+                                                <option key={s.emp_id} value={s.emp_id}>
+                                                    {s.name} {s.working_line_no ? `(Assigned: Line ${s.working_line_no})` : ''}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                                            <Cpu size={18} />
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
 
                             <button type="submit" className="w-full bg-indigo-600 text-white py-5 rounded-[1.5rem] font-black text-sm hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 active:scale-95">
@@ -374,7 +446,6 @@ export default function IELinesPage() {
                 </div>
             )}
 
-            {/* Drill-Down */}
             {drillDownModal && (
                 <div className="fixed inset-0 z-[110] flex items-center justify-end">
                     <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-md" onClick={() => setDrillDownModal(null)} />
@@ -437,7 +508,6 @@ export default function IELinesPage() {
                 </div>
             )}
 
-            {/* Staff Assignment */}
             {staffPanelOpen && (
                 <div className="fixed inset-0 z-[120] overflow-hidden">
                     <div className="absolute inset-0 bg-gray-950/60 backdrop-blur-sm" onClick={() => setStaffPanelOpen(false)} />
@@ -453,37 +523,88 @@ export default function IELinesPage() {
                             <button onClick={() => setStaffPanelOpen(false)} className="p-3 hover:bg-white/10 rounded-2xl transition-colors"><X size={32} /></button>
                         </div>
                         <div className="flex-1 flex overflow-hidden divide-x divide-gray-100">
-                            {/* Pool */}
                             <div className="w-1/2 flex flex-col bg-gray-50/30">
-                                <div className="p-6 bg-white border-b border-gray-100 flex justify-between items-center">
-                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Available Resource Pool</span>
-                                    <span className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-xl text-[10px] font-black">{unassignedStaff.length}</span>
+                                <div className="p-6 bg-white border-b border-gray-100 space-y-4">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Resource Allocation Pool</span>
+                                        <span className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-xl text-[10px] font-black">{allocatableStaff.length} Total</span>
+                                    </div>
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            placeholder="Search by ID, Token or Name..."
+                                            value={staffSearch}
+                                            onChange={(e) => setStaffSearch(e.target.value)}
+                                            className="w-full bg-gray-50 border border-gray-100 p-3 pl-10 rounded-2xl text-xs font-bold outline-none focus:ring-2 ring-indigo-500/10"
+                                        />
+                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                                            <Box size={16} />
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="flex-1 overflow-y-auto p-6 space-y-3 no-scrollbar">
-                                    {unassignedStaff.map(s => (
-                                        <label key={s.emp_id} className={`flex items-center justify-between p-5 rounded-3xl border transition-all cursor-pointer shadow-sm ${selectedUnassigned.includes(s.emp_id) ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-gray-100'}`}>
-                                            <div className="flex items-center gap-4 min-w-0">
-                                                <input type="checkbox" className="hidden" onChange={(e) => {
-                                                    if (e.target.checked) setSelectedUnassigned([...selectedUnassigned, s.emp_id]);
-                                                    else setSelectedUnassigned(selectedUnassigned.filter(id => id !== s.emp_id));
-                                                }} />
-                                                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-xs ${selectedUnassigned.includes(s.emp_id) ? 'bg-white/20' : 'bg-gray-100 text-gray-400'}`}>{s.name.charAt(0)}</div>
-                                                <div className="min-w-0">
-                                                    <p className={`font-black text-sm truncate ${selectedUnassigned.includes(s.emp_id) ? 'text-white' : 'text-gray-900'}`}>{s.name}</p>
-                                                    <p className={`text-[9px] font-bold uppercase truncate ${selectedUnassigned.includes(s.emp_id) ? 'text-indigo-200' : 'text-gray-400'}`}>{s.department_name}</p>
-                                                </div>
-                                            </div>
-                                            {selectedUnassigned.includes(s.emp_id) && <div className="p-1 bg-white rounded-full"><Plus size={12} className="text-indigo-600" /></div>}
-                                        </label>
-                                    ))}
+                                <div className="flex-1 overflow-y-auto p-6 space-y-6 no-scrollbar">
+                                    {/* Available Section */}
+                                    {allocatableStaff.filter(s => s.is_available === 1 && (s.name.toLowerCase().includes(staffSearch.toLowerCase()) || s.emp_id.toLowerCase().includes(staffSearch.toLowerCase()) || (s.token_no && s.token_no.toLowerCase().includes(staffSearch.toLowerCase())))).length > 0 && (
+                                        <div className="space-y-3">
+                                            <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest px-2">Targetable Nodes (Available)</p>
+                                            {allocatableStaff.filter(s => s.is_available === 1 && (s.name.toLowerCase().includes(staffSearch.toLowerCase()) || s.emp_id.toLowerCase().includes(staffSearch.toLowerCase()) || (s.token_no && s.token_no.toLowerCase().includes(staffSearch.toLowerCase())))).map(s => (
+                                                <label key={s.emp_id} className={`flex items-center justify-between p-5 rounded-3xl border transition-all cursor-pointer shadow-sm ${selectedUnassigned.includes(s.emp_id) ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-gray-100 hover:border-indigo-200'}`}>
+                                                    <div className="flex items-center gap-4 min-w-0">
+                                                        <input type="checkbox" className="hidden" onChange={(e) => {
+                                                            if (e.target.checked) setSelectedUnassigned([...selectedUnassigned, s.emp_id]);
+                                                            else setSelectedUnassigned(selectedUnassigned.filter(id => id !== s.emp_id));
+                                                        }} />
+                                                        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-xs ${selectedUnassigned.includes(s.emp_id) ? 'bg-white/20' : 'bg-emerald-50 text-emerald-600'}`}>{s.name.charAt(0)}</div>
+                                                        <div className="min-w-0">
+                                                            <p className={`font-black text-sm truncate ${selectedUnassigned.includes(s.emp_id) ? 'text-white' : 'text-gray-900'}`}>{s.name}</p>
+                                                            <p className={`text-[9px] font-bold uppercase truncate ${selectedUnassigned.includes(s.emp_id) ? 'text-indigo-200' : 'text-gray-400'}`}>{s.designation_name} • {s.emp_id}</p>
+                                                        </div>
+                                                    </div>
+                                                    {selectedUnassigned.includes(s.emp_id) && <div className="p-1 bg-white rounded-full"><Plus size={12} className="text-indigo-600" /></div>}
+                                                </label>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* Assigned Section */}
+                                    {allocatableStaff.filter(s => s.is_available === 0 && (s.name.toLowerCase().includes(staffSearch.toLowerCase()) || s.emp_id.toLowerCase().includes(staffSearch.toLowerCase()) || (s.token_no && s.token_no.toLowerCase().includes(staffSearch.toLowerCase())))).length > 0 && (
+                                        <div className="space-y-3">
+                                            <p className="text-[9px] font-black text-amber-500 uppercase tracking-widest px-2">Cross-Line Nodes (In Multi-Work)</p>
+                                            {allocatableStaff.filter(s => s.is_available === 0 && (s.name.toLowerCase().includes(staffSearch.toLowerCase()) || s.emp_id.toLowerCase().includes(staffSearch.toLowerCase()) || (s.token_no && s.token_no.toLowerCase().includes(staffSearch.toLowerCase())))).map(s => (
+                                                <label key={s.emp_id} className={`flex items-center justify-between p-5 rounded-3xl border transition-all cursor-pointer shadow-sm ${selectedUnassigned.includes(s.emp_id) ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-gray-50/50 border-gray-100 grayscale-[0.5] opacity-80'}`}>
+                                                    <div className="flex items-center gap-4 min-w-0">
+                                                        <input type="checkbox" className="hidden" onChange={(e) => {
+                                                            if (e.target.checked) setSelectedUnassigned([...selectedUnassigned, s.emp_id]);
+                                                            else setSelectedUnassigned(selectedUnassigned.filter(id => id !== s.emp_id));
+                                                        }} />
+                                                        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-xs ${selectedUnassigned.includes(s.emp_id) ? 'bg-white/20' : 'bg-gray-200 text-gray-400'}`}>{s.name.charAt(0)}</div>
+                                                        <div className="min-w-0">
+                                                            <p className={`font-black text-sm truncate ${selectedUnassigned.includes(s.emp_id) ? 'text-white' : 'text-gray-900'}`}>{s.name}</p>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="bg-amber-100 text-amber-700 text-[7px] font-black px-1.5 py-0.5 rounded-md uppercase">Assigned</span>
+                                                                <p className={`text-[9px] font-bold uppercase truncate ${selectedUnassigned.includes(s.emp_id) ? 'text-indigo-200' : 'text-gray-400'}`}>{s.designation_name}</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {allocatableStaff.length === 0 && (
+                                        <div className="h-full flex flex-col items-center justify-center text-center p-10">
+                                            <Users size={48} className="text-gray-200 mb-4" />
+                                            <p className="text-sm font-black text-gray-400">No Targetable Nodes Found</p>
+                                            <p className="text-[10px] font-bold text-gray-300 uppercase mt-2">Adjust search or check production registry</p>
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="p-8 bg-white border-t border-gray-100">
                                     <button disabled={selectedUnassigned.length === 0} onClick={handleAssign} className="w-full bg-indigo-600 disabled:bg-gray-100 text-white py-5 rounded-[1.5rem] font-black text-xs flex items-center justify-center gap-3 shadow-xl transition-all hover:translate-y-[-2px] active:scale-95">
-                                        Bind to Line Command <ArrowRight size={18} />
+                                        Bind to Line {activeLineItem?.lineInfo.line_no} Command <ArrowRight size={18} />
                                     </button>
                                 </div>
                             </div>
-                            {/* Linked */}
                             <div className="w-1/2 flex flex-col bg-white">
                                 <div className="p-6 border-b border-gray-100 flex justify-between items-center">
                                     <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Operational Core</span>
@@ -540,14 +661,26 @@ export default function IELinesPage() {
                 </div>
             )}
 
-            {/* Work Modal */}
             {workEditModal && (
                 <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-gray-950/60 backdrop-blur-md" onClick={() => setWorkEditModal(null)} />
                     <div className="bg-white rounded-[3rem] shadow-2xl w-full max-w-md relative overflow-hidden animate-in zoom-in-95 duration-200">
                         <div className="p-10 border-b border-gray-50 bg-indigo-600 text-white">
-                            <h3 className="text-2xl font-black tracking-tight">Node Metrics</h3>
-                            <p className="text-[10px] text-indigo-200 font-bold uppercase tracking-widest mt-1">{workEditModal.name} • Internal Node: {workEditModal.emp_id}</p>
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <h3 className="text-2xl font-black tracking-tight">Node Metrics</h3>
+                                    <p className="text-[10px] text-indigo-200 font-bold uppercase tracking-widest mt-1">{workEditModal.name} • Internal Node: {workEditModal.emp_id}</p>
+                                </div>
+                                {workEditModal.operationId && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setWorkEditModal({ ...workEditModal, operationId: null })}
+                                        className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all"
+                                    >
+                                        Clear Operation
+                                    </button>
+                                )}
+                            </div>
                         </div>
                         <form onSubmit={handleUpdateWork} className="p-10 space-y-6">
                             <div className="space-y-2">

@@ -17,9 +17,11 @@ class OrderService {
             const cleanSizes = sizeCatDef.sizes.split(',').map(s => s.trim().toLowerCase()).filter(s => s);
             const qtyTableName = MasterRepo.getTableNameForCategory(sizeCatDef.size_category_name);
             const samSeamTableName = MasterRepo.getSamSeamTableName(sizeCatDef.size_category_name);
+            const loadingTableName = MasterRepo.getLoadingTableName(sizeCatDef.size_category_name);
 
             await OrderRepo.ensureOrderQtyTable(client, qtyTableName, cleanSizes);
             await MasterRepo.ensureSamSeamTable(client, samSeamTableName, cleanSizes);
+            await MasterRepo.ensureLoadingTable(client, loadingTableName, cleanSizes);
 
             const maxId = await OrderRepo.getMaxOrderId(client);
             const newOrderId = maxId + 1;
@@ -59,8 +61,10 @@ class OrderService {
             const newQtyTableName = MasterRepo.getTableNameForCategory(newSizeCatDef.size_category_name);
             const cleanSizes = newSizeCatDef.sizes.split(',').map(s => s.trim().toLowerCase()).filter(s => s);
 
-            // 2. Ensure new table exists (ERP-Grade Idempotent)
+            // 2. Ensure new tables exist (ERP-Grade Idempotent)
+            const newLoadingTableName = MasterRepo.getLoadingTableName(newSizeCatDef.size_category_name);
             await OrderRepo.ensureOrderQtyTable(client, newQtyTableName, cleanSizes);
+            await MasterRepo.ensureLoadingTable(client, newLoadingTableName, cleanSizes);
 
             // 3. Handle Size Category Change (Cleanup Old Data)
             if (oldSizeCatId != newSizeCatId) {

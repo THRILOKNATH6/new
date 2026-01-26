@@ -10,7 +10,8 @@ class IERepository {
             FROM employees e
             LEFT JOIN designations deg ON e.designation_id = deg.designation_id
             LEFT JOIN operation_master om ON e.assigned_operation_id = om.operation_id
-            WHERE e.working_line_no = $1 AND e.department_id IN (1, 4)
+            WHERE (e.working_line_no = $1 OR (e.working_line_no = 0 AND EXISTS (SELECT 1 FROM multi_work mw WHERE mw.emp_id = e.emp_id AND $1 = ANY(mw.multi_lines))))
+              AND e.department_id IN (1, 4)
             ORDER BY e.department_id ASC, e.name ASC
         `;
         const { rows } = await db.query(query, [lineNo]);
@@ -27,6 +28,19 @@ class IERepository {
             ORDER BY e.department_id ASC, e.name ASC
         `;
         const { rows } = await db.query(query);
+        return rows;
+    }
+
+    async getAllocatableStaff(departmentId, minLevel) {
+        const query = `
+            SELECT e.emp_id, e.token_no, e.qr_id, e.name, deg.designation_name, e.working_line_no, e.assigned_operation_id,
+                   CASE WHEN e.working_line_no IS NULL AND e.assigned_operation_id IS NULL THEN 1 ELSE 0 END as is_available
+            FROM employees e
+            LEFT JOIN designations deg ON e.designation_id = deg.designation_id
+            WHERE e.department_id = $1 AND deg.designation_level > $2 AND e.status = 'ACTIVE'
+            ORDER BY is_available DESC, e.name ASC
+        `;
+        const { rows } = await db.query(query, [departmentId, minLevel]);
         return rows;
     }
 
@@ -59,7 +73,7 @@ class IERepository {
     async updateWorkDetails(empId, { operationId, shiftNo, workStage, dailyTarget }) {
         const query = `
             UPDATE employees
-            SET assigned_operation_id = COALESCE($2, assigned_operation_id),
+            SET assigned_operation_id = $2,
                 shift_no = COALESCE($3, shift_no),
                 work_stage = COALESCE($4, work_stage),
                 daily_target = COALESCE($5, daily_target)

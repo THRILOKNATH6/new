@@ -9,10 +9,9 @@ class CuttingRepository {
             LEFT JOIN size_categorys sc ON o.size_category = sc.size_category_id
             ORDER BY o.order_id DESC
         `;
-        const result = await db.query(baseQuery);
-        const allOrders = result.rows;
+        const { rows: allOrders } = await db.query(baseQuery);
 
-        // Filter out orders based on BUNDLING completion (not cutting completion)
+        // Filter out completed orders
         const filteredOrders = [];
         for (const order of allOrders) {
             // Skip explicitly COMPLETED orders
@@ -20,72 +19,50 @@ class CuttingRepository {
                 continue;
             }
 
-            // Calculate BUNDLING completion percentage using BundleService logic
-            const BundleRepo = require('./bundleRepo');
+            // Simple check: if no cutting data, include
+            const cuttingCheckQuery = `
+                SELECT COUNT(*) as count FROM cutting WHERE order_id = $1
+            `;
+            const cuttingResult = await db.query(cuttingCheckQuery, [order.order_id]);
+            const hasCuttingData = parseInt(cuttingResult.rows[0].count, 10) > 0;
+
+            if (!hasCuttingData) {
+                filteredOrders.push(order);
+                continue;
+            }
+
+            // Calculate completion percentage using existing logic
             const MasterRepo = require('../repositories/it/masterRepo');
             const tableName = MasterRepo.getTableNameForCategory(order.size_category_name);
             const sizeList = order.sizes ? order.sizes.split(',').map(s => s.trim()) : [];
 
             try {
-                // Get order quantities from dynamic table
                 const orderQty = await this.getDynamicOrderQty(tableName, order.order_id);
-                
-                // Get cutting quantities (grouped by size)
                 const cutQtyRows = await this.getExistingCuttingQty(order.order_id);
-                const cutQtyMap = {};
-                for (const cutRow of cutQtyRows) {
-                    cutQtyMap[cutRow.size.toLowerCase()] = parseInt(cutRow.cut_qty, 10);
-                }
-
-                // Get bundled quantities (grouped by size) - KEY CHANGE
-                const bundledQtyRows = await BundleRepo.getBundledQtyByOrder(order.order_id);
-                const bundledQtyMap = {};
-                for (const bundleRow of bundledQtyRows) {
-                    bundledQtyMap[bundleRow.size.toLowerCase()] = parseInt(bundleRow.bundled_qty, 10);
-                }
-
-                // Calculate totals for bundling percentage
+                
                 let totalOrderQty = 0;
                 let totalCutQty = 0;
-                let totalBundledQty = 0;
                 
                 sizeList.forEach(size => {
                     const lowerSize = size.toLowerCase();
                     const oQty = orderQty ? (parseInt(orderQty[lowerSize], 10) || 0) : 0;
-                    const cQty = cutQtyMap[lowerSize] || 0;
-                    const bQty = bundledQtyMap[lowerSize] || 0;
+                    const cQty = cutQtyRows.find(row => row.size.toLowerCase() === lowerSize)?.cut_qty || 0;
                     
                     totalOrderQty += oQty;
                     totalCutQty += cQty;
-                    totalBundledQty += bQty;
                 });
                 
-                // Calculate BUNDLING completion percentage
-                const bundlingCompletionPercentage = totalCutQty > 0
-                    ? parseFloat(((totalBundledQty / totalCutQty) * 100).toFixed(2))
+                const completionPercentage = totalOrderQty > 0
+                    ? parseFloat(((totalCutQty / totalOrderQty) * 100).toFixed(2))
                     : 0;
                 
-                // HIDE order only if bundling is 100% complete
-                // SHOW order if bundling < 100% (even if cutting = 100%)
-                if (bundlingCompletionPercentage < 100) {
-                    // Add cutting completion percentage for badge display
-                    const cuttingCompletionPercentage = totalOrderQty > 0
-                        ? parseFloat(((totalCutQty / totalOrderQty) * 100).toFixed(2))
-                        : 0;
-                    
-                    filteredOrders.push({
-                        ...order,
-                        cutting_completion_percentage: cuttingCompletionPercentage,
-                        bundling_completion_percentage: bundlingCompletionPercentage
-                    });
+                // Only include orders with completion < 100%
+                if (completionPercentage < 100) {
+                    filteredOrders.push(order);
                 }
             } catch (error) {
                 // If error in calculation, include the order (failsafe)
-                filteredOrders.push({
-                    ...order,
-                    cutting_completion_percentage: 0,
-                    bundling_completion_percentage: 0
-                });
+                filteredOrders.push(order);
             }
         }
         
@@ -147,7 +124,7 @@ class CuttingRepository {
         const result = await db.query(query, params);
         const allOrders = result.rows;
 
-        // Filter out orders based on BUNDLING completion (not cutting completion)
+        // Filter out completed orders using same logic as getOrders
         const filteredOrders = [];
         for (const order of allOrders) {
             // Skip explicitly COMPLETED orders
@@ -155,79 +132,57 @@ class CuttingRepository {
                 continue;
             }
 
-            // Calculate BUNDLING completion percentage using BundleService logic
-            const BundleRepo = require('./bundleRepo');
+            // Simple check: if no cutting data, include
+            const cuttingCheckQuery = `
+                SELECT COUNT(*) as count FROM cutting WHERE order_id = $1
+            `;
+            const cuttingResult = await db.query(cuttingCheckQuery, [order.order_id]);
+            const hasCuttingData = parseInt(cuttingResult.rows[0].count, 10) > 0;
+
+            if (!hasCuttingData) {
+                filteredOrders.push(order);
+                continue;
+            }
+
+            // Calculate completion percentage using existing logic
             const MasterRepo = require('../repositories/it/masterRepo');
             const tableName = MasterRepo.getTableNameForCategory(order.size_category_name);
             const sizeList = order.sizes ? order.sizes.split(',').map(s => s.trim()) : [];
 
             try {
-                // Get order quantities from dynamic table
                 const orderQty = await this.getDynamicOrderQty(tableName, order.order_id);
-                
-                // Get cutting quantities (grouped by size)
                 const cutQtyRows = await this.getExistingCuttingQty(order.order_id);
-                const cutQtyMap = {};
-                for (const cutRow of cutQtyRows) {
-                    cutQtyMap[cutRow.size.toLowerCase()] = parseInt(cutRow.cut_qty, 10);
-                }
-
-                // Get bundled quantities (grouped by size) - KEY CHANGE
-                const bundledQtyRows = await BundleRepo.getBundledQtyByOrder(order.order_id);
-                const bundledQtyMap = {};
-                for (const bundleRow of bundledQtyRows) {
-                    bundledQtyMap[bundleRow.size.toLowerCase()] = parseInt(bundleRow.bundled_qty, 10);
-                }
-
-                // Calculate totals for bundling percentage
+                
                 let totalOrderQty = 0;
                 let totalCutQty = 0;
-                let totalBundledQty = 0;
                 
                 sizeList.forEach(size => {
                     const lowerSize = size.toLowerCase();
                     const oQty = orderQty ? (parseInt(orderQty[lowerSize], 10) || 0) : 0;
-                    const cQty = cutQtyMap[lowerSize] || 0;
-                    const bQty = bundledQtyMap[lowerSize] || 0;
+                    const cQty = cutQtyRows.find(row => row.size.toLowerCase() === lowerSize)?.cut_qty || 0;
                     
                     totalOrderQty += oQty;
                     totalCutQty += cQty;
-                    totalBundledQty += bQty;
                 });
                 
-                // Calculate BUNDLING completion percentage
-                const bundlingCompletionPercentage = totalCutQty > 0
-                    ? parseFloat(((totalBundledQty / totalCutQty) * 100).toFixed(2))
+                const completionPercentage = totalOrderQty > 0
+                    ? parseFloat(((totalCutQty / totalOrderQty) * 100).toFixed(2))
                     : 0;
                 
-                // HIDE order only if bundling is 100% complete
-                // SHOW order if bundling < 100% (even if cutting = 100%)
-                if (bundlingCompletionPercentage < 100) {
-                    // Add cutting completion percentage for badge display
-                    const cuttingCompletionPercentage = totalOrderQty > 0
-                        ? parseFloat(((totalCutQty / totalOrderQty) * 100).toFixed(2))
-                        : 0;
-                    
-                    filteredOrders.push({
-                        ...order,
-                        cutting_completion_percentage: cuttingCompletionPercentage,
-                        bundling_completion_percentage: bundlingCompletionPercentage
-                    });
+                // Only include orders with completion < 100%
+                if (completionPercentage < 100) {
+                    filteredOrders.push(order);
                 }
             } catch (error) {
                 // If error in calculation, include the order (failsafe)
-                filteredOrders.push({
-                    ...order,
-                    cutting_completion_percentage: 0,
-                    bundling_completion_percentage: 0
-                });
+                filteredOrders.push(order);
             }
         }
         
         return filteredOrders;
     }
 
-    async getOrdersCount(searchParams = {}) {
+async getOrdersCount(searchParams = {}) {
         const {
             style_id,
             order_id,
@@ -269,7 +224,7 @@ class CuttingRepository {
         const result = await db.query(query, params);
         const allOrders = result.rows;
 
-        // Filter out orders based on BUNDLING completion (not cutting completion)
+        // Filter out completed orders using same logic as getOrders
         let filteredCount = 0;
         for (const order of allOrders) {
             // Skip explicitly COMPLETED orders
@@ -277,58 +232,49 @@ class CuttingRepository {
                 continue;
             }
 
-            // Calculate BUNDLING completion percentage using BundleService logic
-            const BundleRepo = require('./bundleRepo');
+            // Simple check: if no cutting data, include
+            const cuttingCheckQuery = `
+                SELECT COUNT(*) as count FROM cutting WHERE order_id = $1
+            `;
+            const cuttingResult = await db.query(cuttingCheckQuery, [order.order_id]);
+            const hasCuttingData = parseInt(cuttingResult.rows[0].count, 10) > 0;
+
+            if (!hasCuttingData) {
+                filteredCount++;
+                continue;
+            }
+
+            // Calculate completion percentage using existing logic
             const MasterRepo = require('../repositories/it/masterRepo');
             const tableName = MasterRepo.getTableNameForCategory(order.size_category_name);
             const sizeList = order.sizes ? order.sizes.split(',').map(s => s.trim()) : [];
 
             try {
-                // Get order quantities from dynamic table
                 const orderQty = await this.getDynamicOrderQty(tableName, order.order_id);
-                
-                // Get cutting quantities (grouped by size)
                 const cutQtyRows = await this.getExistingCuttingQty(order.order_id);
-                const cutQtyMap = {};
-                for (const cutRow of cutQtyRows) {
-                    cutQtyMap[cutRow.size.toLowerCase()] = parseInt(cutRow.cut_qty, 10);
-                }
-
-                // Get bundled quantities (grouped by size) - KEY CHANGE
-                const bundledQtyRows = await BundleRepo.getBundledQtyByOrder(order.order_id);
-                const bundledQtyMap = {};
-                for (const bundleRow of bundledQtyRows) {
-                    bundledQtyMap[bundleRow.size.toLowerCase()] = parseInt(bundleRow.bundled_qty, 10);
-                }
-
-                // Calculate totals for bundling percentage
+                
                 let totalOrderQty = 0;
                 let totalCutQty = 0;
-                let totalBundledQty = 0;
                 
                 sizeList.forEach(size => {
                     const lowerSize = size.toLowerCase();
                     const oQty = orderQty ? (parseInt(orderQty[lowerSize], 10) || 0) : 0;
-                    const cQty = cutQtyMap[lowerSize] || 0;
-                    const bQty = bundledQtyMap[lowerSize] || 0;
+                    const cQty = cutQtyRows.find(row => row.size.toLowerCase() === lowerSize)?.cut_qty || 0;
                     
                     totalOrderQty += oQty;
                     totalCutQty += cQty;
-                    totalBundledQty += bQty;
                 });
                 
-                // Calculate BUNDLING completion percentage
-                const bundlingCompletionPercentage = totalCutQty > 0
-                    ? parseFloat(((totalBundledQty / totalCutQty) * 100).toFixed(2))
+                const completionPercentage = totalOrderQty > 0
+                    ? parseFloat(((totalCutQty / totalOrderQty) * 100).toFixed(2))
                     : 0;
                 
-                // HIDE order only if bundling is 100% complete
-                // SHOW order if bundling < 100% (even if cutting = 100%)
-                if (bundlingCompletionPercentage < 100) {
+                // Only count orders with completion < 100%
+                if (completionPercentage < 100) {
                     filteredCount++;
                 }
             } catch (error) {
-                // If error in calculation, include the order (failsafe)
+                // If error in calculation, include order (failsafe)
                 filteredCount++;
             }
         }
@@ -336,7 +282,114 @@ class CuttingRepository {
         return filteredCount;
     }
 
-    // Keep all existing methods unchanged below this line
+        if (order_id) {
+            query += ` AND o.order_id = $${paramIndex++}`;
+            params.push(parseInt(order_id));
+        }
+
+        if (buyer) {
+            query += ` AND o.buyer ILIKE $${paramIndex++}`;
+            params.push(`%${buyer}%`);
+        }
+
+        if (po) {
+            query += ` AND o.po ILIKE $${paramIndex++}`;
+            params.push(`%${po}%`);
+        }
+
+        const { rows } = await db.query(query, params);
+        return parseInt(rows[0].total, 10);
+    }
+
+        if (order_id) {
+            query += ` AND o.order_id = $${paramIndex++}`;
+            params.push(parseInt(order_id));
+        }
+
+        if (buyer) {
+            query += ` AND o.buyer ILIKE $${paramIndex++}`;
+            params.push(`%${buyer}%`);
+        }
+
+        if (po) {
+            query += ` AND o.po ILIKE $${paramIndex++}`;
+            params.push(`%${po}%`);
+        }
+
+        // Get all matching orders
+        const result = await db.query(query, params);
+        const allOrders = result.rows;
+
+        // Filter out 100% completed orders using same logic as getOrders
+        let filteredCount = 0;
+        for (const order of allOrders) {
+            // Skip explicitly COMPLETED orders
+            if (order.status === 'COMPLETED') {
+                continue;
+            }
+
+            // Calculate completion percentage
+            const MasterRepo = require('../repositories/it/masterRepo');
+            const tableName = MasterRepo.getTableNameForCategory(order.size_category_name);
+            const sizeList = order.sizes ? order.sizes.split(',').map(s => s.trim()) : [];
+            
+            if (sizeList.length === 0) {
+                filteredCount++;
+                continue;
+            }
+
+            try {
+                const orderQty = await this.getDynamicOrderQty(tableName, order.order_id);
+                const cutQtyRows = await this.getExistingCuttingQty(order.order_id);
+                
+                let totalOrderQty = 0;
+                let totalCutQty = 0;
+                
+                sizeList.forEach(size => {
+                    const lowerSize = size.toLowerCase();
+                    const oQty = orderQty ? (parseInt(orderQty[lowerSize], 10) || 0) : 0;
+                    const cQty = cutQtyRows.find(row => row.size.toLowerCase() === lowerSize)?.cut_qty || 0;
+                    
+                    totalOrderQty += oQty;
+                    totalCutQty += cQty;
+                });
+                
+                const completionPercentage = totalOrderQty > 0
+                    ? parseFloat(((totalCutQty / totalOrderQty) * 100).toFixed(2))
+                    : 0;
+                
+                // Only count orders with completion < 100%
+                if (completionPercentage < 100) {
+                    filteredCount++;
+                }
+            } catch (error) {
+                // If error in calculation, include order (failsafe)
+                filteredCount++;
+            }
+        }
+        
+        return filteredCount;
+    }
+
+        if (order_id) {
+            query += ` AND o.order_id = $${paramIndex++}`;
+            params.push(parseInt(order_id));
+        }
+
+        if (buyer) {
+            query += ` AND o.buyer ILIKE $${paramIndex++}`;
+            params.push(`%${buyer}%`);
+        }
+
+        if (po) {
+            query += ` AND o.po ILIKE $${paramIndex++}`;
+            params.push(`%${po}%`);
+        }
+
+        const { rows } = await db.query(query, params);
+        return parseInt(rows[0].total, 10);
+    }
+
     async getOrderWithSizes(orderId) {
         const query = `
             SELECT o.*, sc.sizes, sc.size_category_name
@@ -344,14 +397,14 @@ class CuttingRepository {
             LEFT JOIN size_categorys sc ON o.size_category = sc.size_category_id
             WHERE o.order_id = $1
         `;
-        const result = await db.query(query, [orderId]);
-        return result.rows[0];
+        const { rows } = await db.query(query, [orderId]);
+        return rows[0];
     }
 
     async getDynamicOrderQty(tableName, orderId) {
         const query = `SELECT * FROM ${tableName} WHERE order_id = $1`;
-        const result = await db.query(query, [orderId]);
-        return result.rows[0];
+        const { rows } = await db.query(query, [orderId]);
+        return rows[0];
     }
 
     async getExistingCuttingQty(orderId) {
@@ -361,16 +414,19 @@ class CuttingRepository {
             WHERE order_id = $1
             GROUP BY size
         `;
-        const result = await db.query(query, [orderId.toString()]);
-        return result.rows;
+        const { rows } = await db.query(query, [orderId.toString()]);
+        return rows;
     }
 
     async saveCuttingEntries(client, entries) {
+        // We use ON CONFLICT to handle "Update existing" if lay_no is repeated
+        // But usually, common practice is to treat the input as new qty.
+        // If it's "update existing", it might mean updating that specific lay.
         const query = `
             INSERT INTO cutting (order_id, lay_no, style_id, colour_code, size, qty)
             VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (style_id, lay_no, colour_code, size)
-            DO UPDATE SET qty = EXCLUDED.qty
+            DO UPDATE SET qty = EXCLUDED.qty -- Setting to the new value for that lay
             RETURNING *
         `;
 
@@ -378,7 +434,7 @@ class CuttingRepository {
         for (const entry of entries) {
             const values = [
                 entry.orderId.toString(),
-                entry.layNo || 1,
+                entry.layNo || 1, // Default to 1 if not provided, but we should provide it
                 entry.styleId,
                 entry.colourCode,
                 entry.size,
@@ -391,7 +447,10 @@ class CuttingRepository {
     }
 
     async getAggregateStats(orderId, tableName, sizeList) {
+        // Fetch order quantities from dynamic table
         const orderQty = await this.getDynamicOrderQty(tableName, orderId);
+
+        // Fetch cumulative cut quantities for this order
         const cutQtyRows = await this.getExistingCuttingQty(orderId);
         const cutQtyMap = {};
         cutQtyRows.forEach(row => {
@@ -416,10 +475,12 @@ class CuttingRepository {
                 size: size,
                 orderQty: oQty,
                 cutQty: cQty,
+                // Size-wise percentage
                 percentage: oQty > 0 ? parseFloat(((cQty / oQty) * 100).toFixed(2)) : 0
             });
         });
 
+        // Total Cutting Percentage
         stats.totalPercentage = stats.totalOrderQty > 0
             ? parseFloat(((stats.totalCutQty / stats.totalOrderQty) * 100).toFixed(2))
             : 0;

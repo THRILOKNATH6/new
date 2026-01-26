@@ -113,3 +113,28 @@ export const deleteOperation = async (opId, sizeCategoryId) => {
     const { data } = await apiClient.delete(`/ie/operations/${opId}`, { params: { sizeCategoryId } });
     return data;
 };
+
+export const createBatchOperations = async (sizeCategoryId, operations, user) => {
+    const { data } = await apiClient.post('/ie/operations/batch', { sizeCategoryId, operations, user });
+    return data.data;
+};
+
+export const createBatchOperationsForStyle = async (styleId, operations, user) => {
+    const { data } = await apiClient.post('/ie/operations/batch-style', { styleId, operations, user });
+    return data.data;
+};
+
+export const getOperationsByStyle = async (styleId) => {
+    const { data } = await apiClient.get(`/ie/operations/style/${styleId}`);
+    return data.data;
+};
+
+export const updateOperationByStyle = async (styleId, oldSequence, opData) => {
+    const { data } = await apiClient.put(`/ie/operations/style/${styleId}/${oldSequence}`, opData);
+    return data.data;
+};
+
+export const deleteOperationByStyle = async (styleId, sequence) => {
+    const { data } = await apiClient.delete(`/ie/operations/style/${styleId}/${sequence}`);
+    return data;
+};

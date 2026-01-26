@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send } from 'lucide-react';
+import { ArrowLeft, Send, Scissors, Package, Plus } from 'lucide-react';
 import cuttingService from '../api/cuttingService';
 import CuttingForm from '../components/CuttingForm';
 import PercentagePanel from '../components/PercentagePanel';
+import BundleManagement from '../components/BundleManagement';
+import MultiSizeBundleForm from '../components/MultiSizeBundleForm';
 
 const CuttingEntryPage = () => {
     const { id } = useParams();
@@ -15,6 +17,7 @@ const CuttingEntryPage = () => {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
     const [successMessage, setSuccessMessage] = useState(null);
+    const [activeTab, setActiveTab] = useState('cutting'); // 'cutting', 'bundles', or 'multi-bundle'
 
     useEffect(() => {
         fetchDetails();
@@ -36,6 +39,15 @@ const CuttingEntryPage = () => {
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleMultiSizeBundleSuccess = (createdBundles) => {
+        // Refresh data to show updated statistics
+        fetchDetails();
+    };
+
+    const handleMultiSizeBundleCancel = () => {
+        setActiveTab('bundles'); // Go back to regular bundle management
     };
 
     const handleQtyChange = (size, value) => {
@@ -117,37 +129,84 @@ const CuttingEntryPage = () => {
                 </div>
             </header>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 items-start">
-                <div className="lg:col-span-8 space-y-2">
-                    {error && (
-                        <div className="bg-red-50 border border-red-200 p-2 rounded text-[11px] text-red-700 font-bold flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 bg-red-600 rounded-full" />
-                            {error}
-                        </div>
-                    )}
-                    {successMessage && (
-                        <div className="bg-emerald-50 border border-emerald-200 p-2 rounded text-[11px] text-emerald-700 font-bold flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 bg-emerald-600 rounded-full" />
-                            {successMessage}
-                        </div>
-                    )}
-
-                    <CuttingForm
-                        order={order}
-                        sizes={stats.sizes}
-                        cuttingData={cuttingInputs}
-                        layNo={layNo}
-                        onQtyChange={handleQtyChange}
-                        onLayNoChange={setLayNo}
-                        onSave={handleSave}
-                        loading={saving}
-                    />
-                </div>
-
-                <div className="lg:col-span-4 lg:sticky lg:top-0">
-                    <PercentagePanel stats={stats} />
-                </div>
+            {/* Tab Navigation */}
+            <div className="flex gap-1 border-b border-slate-300">
+                <button
+                    onClick={() => setActiveTab('cutting')}
+                    className={`flex items-center gap-2 px-4 py-2 text-[11px] font-black uppercase tracking-wide transition-none ${activeTab === 'cutting'
+                            ? 'bg-blue-500 text-white border-b-2 border-blue-600'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                >
+                    <Scissors size={14} />
+                    Cutting Entry
+                </button>
+                <button
+                    onClick={() => setActiveTab('bundles')}
+                    className={`flex items-center gap-2 px-4 py-2 text-[11px] font-black uppercase tracking-wide transition-none ${activeTab === 'bundles'
+                            ? 'bg-blue-500 text-white border-b-2 border-blue-600'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                >
+                    <Package size={14} />
+                    Bundle Management
+                </button>
+                <button
+                    onClick={() => setActiveTab('multi-bundle')}
+                    className={`flex items-center gap-2 px-4 py-2 text-[11px] font-black uppercase tracking-wide transition-none ${activeTab === 'multi-bundle'
+                            ? 'bg-blue-500 text-white border-b-2 border-blue-600'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                >
+                    <Plus size={14} />
+                    Multi-Size Bundling
+                </button>
             </div>
+
+            {/* Tab Content */}
+            {activeTab === 'cutting' ? (
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 items-start">
+                    <div className="lg:col-span-8 space-y-2">
+                        {error && (
+                            <div className="bg-red-50 border border-red-200 p-2 rounded text-[11px] text-red-700 font-bold flex items-center gap-2">
+                                <span className="w-1.5 h-1.5 bg-red-600 rounded-full" />
+                                {error}
+                            </div>
+                        )}
+                        {successMessage && (
+                            <div className="bg-emerald-50 border border-emerald-200 p-2 rounded text-[11px] text-emerald-700 font-bold flex items-center gap-2">
+                                <span className="w-1.5 h-1.5 bg-emerald-600 rounded-full" />
+                                {successMessage}
+                            </div>
+                        )}
+
+                        <CuttingForm
+                            order={order}
+                            sizes={stats.sizes}
+                            cuttingData={cuttingInputs}
+                            layNo={layNo}
+                            onQtyChange={handleQtyChange}
+                            onLayNoChange={setLayNo}
+                            onSave={handleSave}
+                            loading={saving}
+                        />
+                    </div>
+
+                    <div className="lg:col-span-4 lg:sticky lg:top-0">
+                        <PercentagePanel stats={stats} />
+                    </div>
+                </div>
+            ) : activeTab === 'bundles' ? (
+                <BundleManagement orderId={id} />
+            ) : (
+                <MultiSizeBundleForm
+                    orderId={id}
+                    styleId={order?.style_id}
+                    colourCode={order?.colour_code}
+                    onSuccess={handleMultiSizeBundleSuccess}
+                    onCancel={handleMultiSizeBundleCancel}
+                />
+            )}
         </div>
     );
 };

@@ -36,8 +36,16 @@ router.get('/masters', requirePermission('MANAGE_LINES'), IEController.getMaster
 // Operations Management
 router.get('/operations', requirePermission('MANAGE_OPERATIONS'), IEController.getOperations);
 router.post('/operations', requirePermission('MANAGE_OPERATIONS'), IEController.createOperation);
+router.post('/operations/batch', requirePermission('MANAGE_OPERATIONS'), IEController.createBatchOperations);
+router.post('/operations/batch-category', requirePermission('MANAGE_OPERATIONS'), IEController.createBatchOperationsForCategory);
+router.post('/operations/batch-style', requirePermission('MANAGE_OPERATIONS'), IEController.createBatchOperationsForStyle);
 router.put('/operations/:opId', requirePermission('MANAGE_OPERATIONS'), IEController.updateOperation);
 router.delete('/operations/:opId', requirePermission('MANAGE_OPERATIONS'), IEController.deleteOperation);
+
+// Style-centric Operations (New)
+router.get('/operations/style/:styleId', requirePermission('MANAGE_OPERATIONS'), IEController.getOperationsByStyle);
+router.put('/operations/style/:styleId/:oldSequence', requirePermission('MANAGE_OPERATIONS'), IEController.updateOperationsByStyle);
+router.delete('/operations/style/:styleId/:sequence', requirePermission('MANAGE_OPERATIONS'), IEController.deleteOperationsByStyle);
 
 module.exports = router;
 

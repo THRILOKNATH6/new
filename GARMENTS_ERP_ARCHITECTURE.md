@@ -243,6 +243,15 @@ The database `GARMENTS` is organized into several functional modules. Below is t
 | `recorded_at` | `timestamp` | | |
 *   **Indexes**: Extensive indexing on time, machine, and operator for analytics.
 
+#### 21. `multi_work` (NEW)
+*Extension for employees assigned to multiple lines/operations.*
+| Column | Type | Constraints | Description |
+| :--- | :--- | :--- | :--- |
+| `emp_id` | `varchar(20)` | **PK**, FK | References `employees` |
+| `multi_lines` | `integer[]` | | Array of line numbers |
+| `multi_operations`| `integer[]` | | Array of operation IDs |
+| `updated_at` | `timestamp` | | |
+
 ---
 
 ## 3. Database Functions

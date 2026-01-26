@@ -55,7 +55,8 @@ class LineRepository {
             SELECT d.department_name, d.department_id, COUNT(e.emp_id) as count
             FROM employees e
             JOIN departments d ON e.department_id = d.department_id
-            WHERE e.working_line_no = $1
+            WHERE e.working_line_no = $1 
+               OR (e.working_line_no = 0 AND EXISTS (SELECT 1 FROM multi_work mw WHERE mw.emp_id = e.emp_id AND $1 = ANY(mw.multi_lines)))
             GROUP BY d.department_name, d.department_id
             ORDER BY 
                 (CASE 
@@ -70,23 +71,30 @@ class LineRepository {
     }
 
     async getLineEmployeesFull(lineNo, tableName = null, styleId = null) {
-        // Use dynamic join if table and style are provided, else fallback to generic (though generic is discouraged)
-        let opJoin = `LEFT JOIN operation_master om ON e.assigned_operation_id = om.operation_id`;
-
-        if (tableName && styleId) {
-            const safeTable = tableName.replace(/[^a-z0-9_]/g, '');
-            opJoin = `LEFT JOIN ${safeTable} om ON (e.assigned_operation_id = om.operation_id AND om.style_id = '${styleId.replace(/'/g, "''")}')`;
-        }
+        const safeTable = (tableName && styleId) ? tableName.replace(/[^a-z0-9_]/g, '') : 'operation_master';
+        const styleFilter = (tableName && styleId) ? `AND om_multi.style_id = '${styleId.replace(/'/g, "''")}'` : '';
+        const mainStyleFilter = (tableName && styleId) ? `AND om.style_id = '${styleId.replace(/'/g, "''")}'` : '';
 
         const query = `
             SELECT 
                 e.emp_id, e.name, d.department_id, d.department_name, deg.designation_name, 
-                om.operation_name, e.assigned_operation_id, e.work_stage, e.daily_target
+                e.assigned_operation_id, e.work_stage, e.daily_target,
+                CASE 
+                    WHEN e.assigned_operation_id = 0 THEN (
+                        SELECT string_agg(om_multi.operation_name, ', ') 
+                        FROM ${safeTable} om_multi 
+                        WHERE om_multi.operation_id = ANY(mw.multi_operations)
+                        ${styleFilter}
+                    )
+                    ELSE om.operation_name
+                END as operation_name
             FROM employees e
             JOIN departments d ON e.department_id = d.department_id
             LEFT JOIN designations deg ON e.designation_id = deg.designation_id
-            ${opJoin}
+            LEFT JOIN multi_work mw ON e.emp_id = mw.emp_id
+            LEFT JOIN ${safeTable} om ON (e.assigned_operation_id = om.operation_id ${mainStyleFilter})
             WHERE e.working_line_no = $1
+               OR (e.working_line_no = 0 AND EXISTS (SELECT 1 FROM multi_work mw2 WHERE mw2.emp_id = e.emp_id AND $1 = ANY(mw2.multi_lines)))
             ORDER BY d.department_id ASC, e.name ASC
         `;
         const { rows } = await db.query(query, [lineNo]);

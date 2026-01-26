@@ -213,6 +213,64 @@ class IEController {
             res.status(400).json({ success: false, message: err.message });
         }
     }
+
+    async createBatchOperations(req, res) {
+        try {
+            const { sizeCategoryId, operations } = req.body;
+            const data = await IEService.createBatchOperations(sizeCategoryId, operations, req.user);
+            res.status(201).json({ success: true, data });
+        } catch (err) {
+            res.status(400).json({ success: false, message: err.message });
+        }
+    }
+
+    async createBatchOperationsForCategory(req, res) {
+        try {
+            const { sizeCategoryId, operations } = req.body;
+            const data = await IEService.createBatchOperationsForCategory(sizeCategoryId, operations, req.user);
+            res.status(201).json({ success: true, data });
+        } catch (err) {
+            res.status(400).json({ success: false, message: err.message });
+        }
+    }
+
+    async createBatchOperationsForStyle(req, res) {
+        try {
+            const { styleId, operations } = req.body;
+            const data = await IEService.createBatchOperationsForStyle(styleId, operations, req.user);
+            res.status(201).json({ success: true, data });
+        } catch (err) {
+            res.status(400).json({ success: false, message: err.message });
+        }
+    }
+    async getOperationsByStyle(req, res) {
+        try {
+            const data = await IEService.getOperationsByStyle(req.params.styleId);
+            res.json({ success: true, data });
+        } catch (err) {
+            res.status(500).json({ success: false, message: err.message });
+        }
+    }
+
+    async updateOperationsByStyle(req, res) {
+        try {
+            const { styleId, oldSequence } = req.params;
+            const data = await IEService.updateOperationsByStyle(styleId, oldSequence, req.body, req.user);
+            res.json({ success: true, data });
+        } catch (err) {
+            res.status(400).json({ success: false, message: err.message });
+        }
+    }
+
+    async deleteOperationsByStyle(req, res) {
+        try {
+            const { styleId, sequence } = req.params;
+            await IEService.deleteOperationsByStyle(styleId, sequence, req.user);
+            res.json({ success: true, message: 'Operation deleted across all categories' });
+        } catch (err) {
+            res.status(400).json({ success: false, message: err.message });
+        }
+    }
 }
 
 module.exports = new IEController();

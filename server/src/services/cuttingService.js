@@ -7,6 +7,69 @@ class CuttingService {
         return await CuttingRepo.getOrders();
     }
 
+    async searchOrders(searchParams) {
+        // Validate and sanitize search parameters
+        const validatedParams = this.validateSearchParams(searchParams);
+        
+        // Execute search with pagination
+        const [orders, totalCount] = await Promise.all([
+            CuttingRepo.searchOrders(validatedParams),
+            CuttingRepo.getOrdersCount(validatedParams)
+        ]);
+        
+        return {
+            orders,
+            pagination: {
+                page: Math.floor(validatedParams.offset / validatedParams.limit) + 1,
+                limit: validatedParams.limit,
+                total: totalCount,
+                pages: Math.ceil(totalCount / validatedParams.limit)
+            },
+            search_criteria: {
+                style_id: validatedParams.style_id,
+                order_id: validatedParams.order_id,
+                buyer: validatedParams.buyer,
+                po: validatedParams.po
+            }
+        };
+    }
+
+    validateSearchParams(searchParams) {
+        const validated = { ...searchParams };
+        
+        // Convert and validate numeric parameters
+        validated.limit = Math.min(parseInt(searchParams.limit) || 50, 200);
+        validated.limit = Math.max(validated.limit, 1);
+        validated.offset = Math.max(parseInt(searchParams.offset) || 0, 0);
+        validated.order_id = searchParams.order_id ? parseInt(searchParams.order_id) : undefined;
+        
+        // Validate order_id if provided
+        if (validated.order_id && (isNaN(validated.order_id) || validated.order_id <= 0)) {
+            throw new Error('order_id must be a positive integer');
+        }
+        
+        // Allowed sort fields
+        const allowedSortFields = ['order_id', 'buyer', 'brand', 'style_id', 'po'];
+        validated.sort_by = allowedSortFields.includes(searchParams.sort_by) 
+            ? searchParams.sort_by 
+            : 'order_id';
+        
+        validated.sort_order = searchParams.sort_order?.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+        
+        // String length validation
+        if (validated.style_id && validated.style_id.length > 50) {
+            throw new Error('style_id must be 50 characters or less');
+        }
+        if (validated.buyer && validated.buyer.length > 100) {
+            throw new Error('buyer must be 100 characters or less');
+        }
+        if (validated.po && validated.po.length > 50) {
+            throw new Error('po must be 50 characters or less');
+        }
+        
+        return validated;
+    }
+
     async getOrderDetails(orderId) {
         const order = await CuttingRepo.getOrderWithSizes(orderId);
         if (!order) throw new Error('Order not found');

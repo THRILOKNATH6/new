@@ -26,6 +26,13 @@ class MasterRepository {
         return `size_${slug}_op_sam_seam`;
     }
 
+    // Helper: Deterministic Table Name for Loading
+    getLoadingTableName(categoryName) {
+        // "MEN TOP" -> "loading_men_top"
+        const slug = categoryName.trim().toLowerCase().replace(/\s+/g, '_');
+        return `loading_${slug}`;
+    }
+
     /**
      * Idempotent table management for SAM/Operations tables.
      * Ensures structure matches reference and corrects legacy columns to INTEGER counts.
@@ -87,6 +94,38 @@ class MasterRepository {
         // 3. Performance Indexes
         await client.query(`CREATE INDEX IF NOT EXISTS "idx_ops_seq_${tableName}" ON "${tableName}" (style_id, operation_sequence)`);
         await client.query(`CREATE INDEX IF NOT EXISTS "idx_ops_style_${tableName}" ON "${tableName}" (style_id)`);
+    }
+
+    /**
+     * Idempotent management for Loading Assignment tables.
+     */
+    async ensureLoadingTable(client, tableName, sizes) {
+        // tableName: loading_{X}
+        // 1. Create base table
+        const query = `
+            CREATE TABLE IF NOT EXISTS "${tableName}" (
+                order_id integer NOT NULL,
+                line_no integer NOT NULL,
+                PRIMARY KEY (order_id, line_no)
+            )
+        `;
+        await client.query(query);
+
+        // 2. Idempotent Size Column Management
+        for (const size of sizes) {
+            const sanitizedSize = size.toLowerCase().trim();
+            if (!sanitizedSize) continue;
+
+            const checkQuery = `
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name = $1 AND column_name = $2
+            `;
+            const { rows } = await client.query(checkQuery, [tableName, sanitizedSize]);
+
+            if (rows.length === 0) {
+                await client.query(`ALTER TABLE "${tableName}" ADD COLUMN "${sanitizedSize}" INTEGER DEFAULT 0`);
+            }
+        }
     }
 
     // --- Style ---
@@ -175,6 +214,10 @@ class MasterRepository {
             const samSeamTable = this.getSamSeamTableName(name);
             await this.ensureSamSeamTable(client, samSeamTable, sizeList);
 
+            // 4. Loading Table Creation (NEW REQUIREMENT)
+            const loadingTable = this.getLoadingTableName(name);
+            await this.ensureLoadingTable(client, loadingTable, sizeList);
+
             await client.query('COMMIT');
             return newRecord;
         } catch (err) {
@@ -219,6 +262,10 @@ class MasterRepository {
             // 5. Update SAM/SEAM Table (Sync columns and correct types)
             const samSeamTable = this.getSamSeamTableName(category.size_category_name);
             await this.ensureSamSeamTable(client, samSeamTable, updatedSizesList);
+
+            // 6. Update Loading Table (Sync columns)
+            const loadingTable = this.getLoadingTableName(category.size_category_name);
+            await this.ensureLoadingTable(client, loadingTable, updatedSizesList);
 
             await client.query('COMMIT');
             return updateResult.rows[0];

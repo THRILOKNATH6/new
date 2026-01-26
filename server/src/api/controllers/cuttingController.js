@@ -34,6 +34,16 @@ class CuttingController {
             res.status(400).json({ success: false, message: err.message });
         }
     }
+
+    async searchOrders(req, res) {
+        try {
+            const searchParams = req.query;
+            const result = await CuttingService.searchOrders(searchParams);
+            res.json({ success: true, data: result });
+        } catch (err) {
+            res.status(400).json({ success: false, message: err.message });
+        }
+    }
 }
 
 module.exports = new CuttingController();
