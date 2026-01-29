@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import * as hrAPI from '../api/hrService';
-import { Plus, Search, Edit2, Filter } from 'lucide-react';
+import { Plus, Search, Edit2, Filter, AlertTriangle } from 'lucide-react';
 import EmployeeForm from '../components/EmployeeForm';
 
 export default function EmployeeList() {
@@ -92,7 +92,19 @@ export default function EmployeeList() {
                         {filteredEmployees.map((emp) => (
                             <tr key={emp.emp_id}>
                                 <td className="font-mono font-bold text-blue-600 tracking-tight">{emp.emp_id}</td>
-                                <td className="font-bold text-slate-800">{emp.name}</td>
+                                <td className="text-slate-800">
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-bold">{emp.name}</span>
+                                        {emp.has_mapping_conflict && (
+                                            <div className="group relative">
+                                                <AlertTriangle size={14} className="text-amber-500 cursor-help" />
+                                                <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 hidden group-hover:block z-[100] w-48 p-2 bg-slate-800 text-white text-[9px] font-bold rounded-lg shadow-xl uppercase tracking-tighter">
+                                                    Designation Violation: This role is not authorized for the {emp.department_name} department in current mapping.
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </td>
                                 <td className="text-slate-600 font-medium">{emp.designation_name}</td>
                                 <td className="text-slate-600 font-medium">{emp.department_name}</td>
                                 <td className="text-slate-500 font-mono italic">

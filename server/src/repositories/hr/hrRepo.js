@@ -37,13 +37,18 @@ class HRRepository {
     }
 
     async getAllEmployees() {
-        // Detailed view for HR List
+        // Detailed view for HR List with conflict detection
         const query = `
-            SELECT e.emp_id, e.name, e.status, e.date_of_join, e.salary,
-                   d.department_name, deg.designation_name
+            SELECT e.emp_id, e.name, e.status, e.date_of_join, e.salary, e.department_id, e.designation_id,
+                   d.department_name, deg.designation_name,
+                   CASE 
+                     WHEN dd.department_id IS NULL THEN true 
+                     ELSE false 
+                   END as has_mapping_conflict
             FROM employees e
             LEFT JOIN departments d ON e.department_id = d.department_id
             LEFT JOIN designations deg ON e.designation_id = deg.designation_id
+            LEFT JOIN department_designations dd ON (e.department_id = dd.department_id AND e.designation_id = dd.designation_id)
             ORDER BY e.date_of_join DESC`;
         const { rows } = await db.query(query);
         return rows;
@@ -88,6 +93,59 @@ class HRRepository {
 
     async getAllDesignations() {
         const { rows } = await db.query('SELECT * FROM designations ORDER BY designation_level');
+        return rows;
+    }
+
+    // --- Designation-Department Mapping ---
+
+    async getDesignationsByDepartment(departmentId) {
+        const query = `
+            SELECT d.* 
+            FROM designations d
+            JOIN department_designations dd ON d.designation_id = dd.designation_id
+            WHERE dd.department_id = $1
+            ORDER BY d.designation_level`;
+        const { rows } = await db.query(query, [departmentId]);
+        return rows;
+    }
+
+    async addDesignationToDepartment(departmentId, designationId) {
+        const query = `
+            INSERT INTO department_designations (department_id, designation_id)
+            VALUES ($1, $2)
+            ON CONFLICT DO NOTHING
+            RETURNING *`;
+        const { rows } = await db.query(query, [departmentId, designationId]);
+        return rows[0];
+    }
+
+    async removeDesignationFromDepartment(departmentId, designationId) {
+        const query = `
+            DELETE FROM department_designations 
+            WHERE department_id = $1 AND designation_id = $2
+            RETURNING *`;
+        const { rows } = await db.query(query, [departmentId, designationId]);
+        return rows[0];
+    }
+
+    async checkMappingExists(departmentId, designationId) {
+        const query = `
+            SELECT 1 FROM department_designations 
+            WHERE department_id = $1 AND designation_id = $2`;
+        const { rowCount } = await db.query(query, [departmentId, designationId]);
+        return rowCount > 0;
+    }
+
+    async getFullMapping() {
+        const query = `
+            SELECT d.department_id, d.department_name, 
+                   json_agg(json_build_object('designation_id', deg.designation_id, 'designation_name', deg.designation_name)) as allowed_designations
+            FROM departments d
+            LEFT JOIN department_designations dd ON d.department_id = dd.department_id
+            LEFT JOIN designations deg ON dd.designation_id = deg.designation_id
+            GROUP BY d.department_id, d.department_name
+            ORDER BY d.department_name`;
+        const { rows } = await db.query(query);
         return rows;
     }
 }

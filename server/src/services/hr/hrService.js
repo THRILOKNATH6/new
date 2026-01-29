@@ -30,7 +30,13 @@ class HRService {
             shiftNo: data.shiftNo || 1
         };
 
-        // 3. Persist
+        // 3. System-Level Validation (Mapping Enforcement)
+        const isAllowed = await HRRepo.checkMappingExists(data.departmentId, data.designationId);
+        if (!isAllowed) {
+            throw new Error('Designation violation: The selected designation is not allowed in this department.');
+        }
+
+        // 4. Persist
         return await HRRepo.createEmployee(employeeData);
     }
 
@@ -51,6 +57,17 @@ class HRService {
 
         if (Object.keys(allowedUpdates).length === 0) {
             throw new Error('No valid fields to update');
+        }
+
+        // 3. Validation if dept or desig changes
+        const deptId = updateData.departmentId || exists.department_id;
+        const desigId = updateData.designationId || exists.designation_id;
+
+        if (updateData.departmentId || updateData.designationId) {
+            const isAllowed = await HRRepo.checkMappingExists(deptId, desigId);
+            if (!isAllowed) {
+                throw new Error('Designation violation: Mapping update would result in unauthorized designation for this department.');
+            }
         }
 
         return await HRRepo.updateEmployee(empId, allowedUpdates);
@@ -86,6 +103,24 @@ class HRService {
 
     async getDesignations() {
         return await HRRepo.getAllDesignations();
+    }
+
+    // --- Mapping Logic ---
+
+    async getMapping() {
+        return await HRRepo.getFullMapping();
+    }
+
+    async getDesignationsByDept(deptId) {
+        return await HRRepo.getDesignationsByDepartment(deptId);
+    }
+
+    async addMapping(deptId, desigId) {
+        return await HRRepo.addDesignationToDepartment(deptId, desigId);
+    }
+
+    async removeMapping(deptId, desigId) {
+        return await HRRepo.removeDesignationFromDepartment(deptId, desigId);
     }
 }
 

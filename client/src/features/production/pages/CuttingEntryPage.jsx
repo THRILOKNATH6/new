@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, Scissors, Package, Plus } from 'lucide-react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, Send, Scissors, Package, Plus, Edit3, X } from 'lucide-react';
 import cuttingService from '../api/cuttingService';
 import CuttingForm from '../components/CuttingForm';
 import PercentagePanel from '../components/PercentagePanel';
@@ -9,7 +9,10 @@ import MultiSizeBundleForm from '../components/MultiSizeBundleForm';
 
 const CuttingEntryPage = () => {
     const { id } = useParams();
+    const [searchParams] = useSearchParams();
+    const editId = searchParams.get('edit_id');
     const navigate = useNavigate();
+
     const [data, setData] = useState(null);
     const [cuttingInputs, setCuttingInputs] = useState({});
     const [layNo, setLayNo] = useState(1);
@@ -17,11 +20,35 @@ const CuttingEntryPage = () => {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
     const [successMessage, setSuccessMessage] = useState(null);
-    const [activeTab, setActiveTab] = useState('cutting'); // 'cutting', 'bundles', or 'multi-bundle'
+    const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'cutting'); // 'cutting', 'bundles', or 'multi-bundle'
 
     useEffect(() => {
         fetchDetails();
     }, [id]);
+
+    useEffect(() => {
+        if (editId && data) {
+            handleEditMode();
+        }
+    }, [editId, data]);
+
+    const handleEditMode = async () => {
+        try {
+            // Find the record if it exists in the journal (not ideal, let's fetch it)
+            // For now, we fetch ALL records for this order to find it or just fetch by ID
+            // Simple approach: find in a local fetch
+            const res = await cuttingService.getRecords({ orderId: id });
+            const record = res.data.find(r => r.cutting_id === parseInt(editId));
+            if (record) {
+                setLayNo(record.lay_no);
+                setCuttingInputs({
+                    [record.size]: record.qty.toString()
+                });
+            }
+        } catch (err) {
+            console.error('Failed to load edit record:', err);
+        }
+    };
 
     const fetchDetails = async () => {
         try {
@@ -64,32 +91,46 @@ const CuttingEntryPage = () => {
         setSuccessMessage(null);
 
         try {
-            const cuttings = Object.entries(cuttingInputs)
-                .map(([size, qty]) => ({
-                    size,
-                    qty: parseInt(qty || 0, 10)
-                }))
-                .filter(c => c.qty > 0);
+            if (editId) {
+                // UPDATE MODE
+                const size = Object.keys(cuttingInputs).find(k => cuttingInputs[k] !== '');
+                const qty = cuttingInputs[size];
 
-            if (cuttings.length === 0) {
-                throw new Error('Please enter at least one quantity');
+                await cuttingService.updateCutting(editId, { qty });
+                setSuccessMessage('Entry updated successfully!');
+
+                // Clear edit param and reset
+                navigate(`/dashboard/production/cutting/${id}`, { replace: true });
+                fetchDetails();
+            } else {
+                // CREATE MODE
+                const cuttings = Object.entries(cuttingInputs)
+                    .map(([size, qty]) => ({
+                        size,
+                        qty: parseInt(qty || 0, 10)
+                    }))
+                    .filter(c => c.qty > 0);
+
+                if (cuttings.length === 0) {
+                    throw new Error('Please enter at least one quantity');
+                }
+
+                const res = await cuttingService.saveCutting(id, {
+                    layNo: parseInt(layNo, 10),
+                    cuttings
+                });
+
+                setData(prev => ({ ...prev, stats: res.data }));
+                setSuccessMessage('Cutting entries saved successfully!');
+
+                // Increment Lay No for next entry if desired, or reset inputs
+                setLayNo(prev => prev + 1);
+                const resetInputs = {};
+                data.stats.sizes.forEach(s => {
+                    resetInputs[s.size] = '';
+                });
+                setCuttingInputs(resetInputs);
             }
-
-            const res = await cuttingService.saveCutting(id, {
-                layNo: parseInt(layNo, 10),
-                cuttings
-            });
-
-            setData(prev => ({ ...prev, stats: res.data }));
-            setSuccessMessage('Cutting entries saved successfully!');
-
-            // Increment Lay No for next entry if desired, or reset inputs
-            setLayNo(prev => prev + 1);
-            const resetInputs = {};
-            data.stats.sizes.forEach(s => {
-                resetInputs[s.size] = '';
-            });
-            setCuttingInputs(resetInputs);
 
             setTimeout(() => setSuccessMessage(null), 5000);
 
@@ -100,7 +141,12 @@ const CuttingEntryPage = () => {
         }
     };
 
-    if (loading) return <div className="p-20 text-center text-white/60">Loading session...</div>;
+    if (loading && !data) return (
+        <div className="flex flex-col items-center justify-center p-20 gap-4">
+            <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            <div className="text-slate-500 font-black uppercase tracking-widest text-[12px]">Synchronizing Production Session...</div>
+        </div>
+    );
     if (!data) return <div className="p-20 text-center text-red-400">Error: {error}</div>;
 
     const { order, stats } = data;
@@ -134,8 +180,8 @@ const CuttingEntryPage = () => {
                 <button
                     onClick={() => setActiveTab('cutting')}
                     className={`flex items-center gap-2 px-4 py-2 text-[11px] font-black uppercase tracking-wide transition-none ${activeTab === 'cutting'
-                            ? 'bg-blue-500 text-white border-b-2 border-blue-600'
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        ? 'bg-blue-500 text-white border-b-2 border-blue-600'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                         }`}
                 >
                     <Scissors size={14} />
@@ -144,8 +190,8 @@ const CuttingEntryPage = () => {
                 <button
                     onClick={() => setActiveTab('bundles')}
                     className={`flex items-center gap-2 px-4 py-2 text-[11px] font-black uppercase tracking-wide transition-none ${activeTab === 'bundles'
-                            ? 'bg-blue-500 text-white border-b-2 border-blue-600'
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        ? 'bg-blue-500 text-white border-b-2 border-blue-600'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                         }`}
                 >
                     <Package size={14} />
@@ -154,8 +200,8 @@ const CuttingEntryPage = () => {
                 <button
                     onClick={() => setActiveTab('multi-bundle')}
                     className={`flex items-center gap-2 px-4 py-2 text-[11px] font-black uppercase tracking-wide transition-none ${activeTab === 'multi-bundle'
-                            ? 'bg-blue-500 text-white border-b-2 border-blue-600'
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        ? 'bg-blue-500 text-white border-b-2 border-blue-600'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                         }`}
                 >
                     <Plus size={14} />
@@ -180,6 +226,27 @@ const CuttingEntryPage = () => {
                             </div>
                         )}
 
+                        {editId && (
+                            <div className="bg-blue-600 text-white p-3 rounded flex justify-between items-center shadow-lg">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-1.5 bg-white/20 rounded">
+                                        <Edit3 size={16} />
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Revision Mode Active</p>
+                                        <p className="text-[13px] font-bold">Modifying Record #{editId}</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => navigate(`/dashboard/production/cutting/${id}`, { replace: true })}
+                                    className="p-1 hover:bg-white/20 rounded transition-none"
+                                    title="Cancel Edit"
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
+                        )}
+
                         <CuttingForm
                             order={order}
                             sizes={stats.sizes}
@@ -189,6 +256,7 @@ const CuttingEntryPage = () => {
                             onLayNoChange={setLayNo}
                             onSave={handleSave}
                             loading={saving}
+                            editMode={!!editId}
                         />
                     </div>
 

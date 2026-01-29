@@ -19,6 +19,18 @@ const cuttingService = {
     searchOrders: async (searchParams) => {
         const response = await apiClient.get('/cutting/orders/search', { params: searchParams });
         return response.data;
+    },
+    getRecords: async (filters) => {
+        const response = await apiClient.get('/cutting/records', { params: filters });
+        return response.data;
+    },
+    updateCutting: async (id, data) => {
+        const response = await apiClient.put(`/cutting/${id}`, data);
+        return response.data;
+    },
+    deleteCutting: async (id) => {
+        const response = await apiClient.delete(`/cutting/${id}`);
+        return response.data;
     }
 };
 

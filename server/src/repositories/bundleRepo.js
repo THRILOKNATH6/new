@@ -226,6 +226,68 @@ class BundleRepository {
         const { rows } = await db.query(query, [orderId.toString(), size]);
         return rows;
     }
+    /**
+     * Delete bundle
+     * @param {Object} client - Database client
+     * @param {number} bundleId - Bundle ID
+     * @returns {Promise<Object>} Deleted bundle
+     */
+    async delete(client, bundleId) {
+        const query = `DELETE FROM bundling WHERE bundle_id = $1 RETURNING *`;
+        const { rows } = await client.query(query, [bundleId]);
+        return rows[0];
+    }
+
+    /**
+     * Check if bundle is used in downstream processes (tracking)
+     * @param {number} bundleId - Bundle ID
+     * @returns {Promise<boolean>} True if used
+     */
+    async checkUsage(bundleId) {
+        const query = `SELECT COUNT(*) as count FROM bundle_tracking_op_wise WHERE bundle_id = $1`;
+        const { rows } = await db.query(query, [bundleId]);
+        return parseInt(rows[0].count, 10) > 0;
+    }
+
+    /**
+     * Get all bundle records with filters for management
+     * @param {Object} filters - Search filters
+     * @returns {Promise<Array>} Array of bundles
+     */
+    async getBundleRecords(filters = {}) {
+        let query = `
+            SELECT b.*, c.lay_no, o.buyer, o.order_id as full_order_id
+            FROM bundling b
+            JOIN cutting c ON b.cutting_id = c.cutting_id
+            JOIN orders o ON c.order_id = o.order_id::text
+            WHERE 1=1
+        `;
+        const params = [];
+        let paramIndex = 1;
+
+        if (filters.styleId) {
+            query += ` AND (b.style_id ILIKE $${paramIndex} OR o.style_id ILIKE $${paramIndex})`;
+            params.push(`%${filters.styleId}%`);
+            paramIndex++;
+        }
+
+        if (filters.orderId) {
+            query += ` AND c.order_id = $${paramIndex}`;
+            params.push(filters.orderId.toString());
+            paramIndex++;
+        }
+
+        if (filters.buyer) {
+            query += ` AND o.buyer ILIKE $${paramIndex}`;
+            params.push(`%${filters.buyer}%`);
+            paramIndex++;
+        }
+
+        query += ` ORDER BY b.created_at DESC, b.bundle_id DESC LIMIT 100`;
+
+        const { rows } = await db.query(query, params);
+        return rows;
+    }
 }
 
 module.exports = new BundleRepository();

@@ -70,6 +70,46 @@ class HRController {
             res.status(500).json({ success: false, message: err.message });
         }
     }
+
+    // --- Mappings ---
+
+    async getMapping(req, res) {
+        try {
+            const data = await HRService.getMapping();
+            res.json({ success: true, data });
+        } catch (err) {
+            res.status(500).json({ success: false, message: err.message });
+        }
+    }
+
+    async getDesignationsByDept(req, res) {
+        try {
+            const data = await HRService.getDesignationsByDept(req.params.deptId);
+            res.json({ success: true, data });
+        } catch (err) {
+            res.status(500).json({ success: false, message: err.message });
+        }
+    }
+
+    async addMapping(req, res) {
+        try {
+            const { departmentId, designationId } = req.body;
+            const result = await HRService.addMapping(departmentId, designationId);
+            res.status(201).json({ success: true, data: result });
+        } catch (err) {
+            res.status(400).json({ success: false, message: err.message });
+        }
+    }
+
+    async removeMapping(req, res) {
+        try {
+            const { departmentId, designationId } = req.params;
+            await HRService.removeMapping(departmentId, designationId);
+            res.json({ success: true, message: 'Mapping removed' });
+        } catch (err) {
+            res.status(400).json({ success: false, message: err.message });
+        }
+    }
 }
 
 module.exports = new HRController();

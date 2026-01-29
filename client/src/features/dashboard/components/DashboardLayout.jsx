@@ -9,7 +9,8 @@ export default function DashboardLayout() {
     // Filter menu items based on permissions
     const availableMenu = MENU_ITEMS.filter(item => {
         if (!item.requiredPermission) return true;
-        return user?.permissions?.includes(item.requiredPermission);
+        return user?.permissions?.includes(item.requiredPermission) ||
+            user?.permissions?.includes('SYSTEM_ADMIN');
     });
 
     return (

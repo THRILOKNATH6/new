@@ -199,9 +199,28 @@ last_changed_by | character varying           | YES  ← NEW
 - **Tab 2**: Bundle Management (new feature)
 
 **Navigation**:
-- Icon-based tabs (Scissors for Cutting, Package for Bundles)
+- Icon-based tabs (Scissors for Cutting, Package for Bundles, Plus for Multi-Size Bundling)
 - Active tab highlighting
 - State preservation when switching tabs
+
+### 4. Multi-Size Bundling Module (`MultiSizeBundleForm.jsx`)
+
+**Location**: `/client/src/features/production/components/MultiSizeBundleForm.jsx`
+
+**Key Features**:
+1. **Batch Allocation**: Manager can allocate bundles for all sizes of an order in a single transaction.
+2. **Sequential Piece Range Generation**:
+   - The UI automatically calculates starting numbers for each size based on the quantities of previous sizes.
+   - Formula: `Row[n].StartingNo = OrderStartingNo + Sum(Qty[0...n-1])`
+   - This ensures a continuous, non-overlapping piece range across the entire PO.
+3. **Advanced Operational Bulk tools**:
+   - "Fill Max": Auto-populates all sizes with their remaining cut quantities.
+   - "Auto-Validate Ranges": Enforces continuity checks before allowing submission.
+
+**Troubleshooting Note: Submit Button Fix (2026-01-26)**
+- **Issue**: Submit button appeared unresponsive.
+- **Root Cause**: A JavaScript `TypeError` in `validateForm` caused by incorrect object destructuring and a logical conflict between static prop values and sequential range expectations.
+- **Fix**: Implemented a dynamic offset calculation in the render loop and corrected the destructuring syntax.
 
 ---
 

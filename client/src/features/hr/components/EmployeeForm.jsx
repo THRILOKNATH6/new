@@ -17,6 +17,8 @@ export default function EmployeeForm({ onClose, onSuccess, initialData = null })
     // Masters for dropdowns
     const [departments, setDepartments] = useState([]);
     const [designations, setDesignations] = useState([]);
+    const [mappings, setMappings] = useState([]);
+    const [filteredDesignations, setFilteredDesignations] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
@@ -36,14 +38,33 @@ export default function EmployeeForm({ onClose, onSuccess, initialData = null })
         }
     }, [initialData]);
 
+    useEffect(() => {
+        if (formData.departmentId && mappings.length > 0) {
+            const currentMapping = mappings.find(m => m.department_id === parseInt(formData.departmentId));
+            const allowedIds = currentMapping?.allowed_designations?.map(d => d.designation_id) || [];
+
+            const filtered = designations.filter(d => allowedIds.includes(d.designation_id));
+            setFilteredDesignations(filtered);
+
+            // If current designation is NOT in the allowed list for the NEW department, clear it
+            if (formData.designationId && !allowedIds.includes(parseInt(formData.designationId))) {
+                setFormData(prev => ({ ...prev, designationId: '' }));
+            }
+        } else {
+            setFilteredDesignations(designations);
+        }
+    }, [formData.departmentId, mappings, designations]);
+
     const loadMasters = async () => {
         try {
-            const [deptRes, desigRes] = await Promise.all([
+            const [deptRes, desigRes, mappingRes] = await Promise.all([
                 hrAPI.getDepartments(),
-                hrAPI.getDesignations()
+                hrAPI.getDesignations(),
+                hrAPI.getMappings()
             ]);
             setDepartments(deptRes.data || []);
             setDesignations(desigRes.data || []);
+            setMappings(mappingRes.data || []);
         } catch (err) {
             console.error(err);
         }
@@ -108,12 +129,15 @@ export default function EmployeeForm({ onClose, onSuccess, initialData = null })
                                 onChange={e => setFormData({ ...formData, designationId: e.target.value })}
                             >
                                 <option value="">Select Role</option>
-                                {designations.map(d => (
+                                {filteredDesignations.map(d => (
                                     <option key={d.designation_id} value={d.designation_id}>
                                         {d.designation_name}
                                     </option>
                                 ))}
                             </select>
+                            {formData.departmentId && filteredDesignations.length === 0 && (
+                                <p className="text-[10px] text-red-500 font-bold mt-1 uppercase">No allowed designations for this department</p>
+                            )}
                         </div>
 
                         {/* Department */}

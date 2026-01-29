@@ -15,6 +15,7 @@ const hrRoutes = require('./api/routes/hrRoutes');
 const itRoutes = require('./api/routes/itRoutes');
 const ieRoutes = require('./api/routes/ieRoutes');
 const cuttingRoutes = require('./api/routes/cuttingRoutes');
+const loadingRoutes = require('./api/routes/loadingRoutes');
 const path = require('path');
 
 app.use('/api/auth', authRoutes);
@@ -23,6 +24,7 @@ app.use('/api/hr', hrRoutes);
 app.use('/api/it', itRoutes);
 app.use('/api/ie', ieRoutes);
 app.use('/api/cutting', cuttingRoutes);
+app.use('/api/loading', loadingRoutes);
 
 // Static files for avatars
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));

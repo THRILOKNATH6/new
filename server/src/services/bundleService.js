@@ -1,4 +1,4 @@
-    const CuttingRepo = require('../repositories/cuttingRepo');
+const CuttingRepo = require('../repositories/cuttingRepo');
 const MasterRepo = require('../repositories/it/masterRepo');
 const BundleRepo = require('../repositories/bundleRepo');
 const db = require('../config/db');
@@ -153,10 +153,10 @@ class BundleService {
 
             // Check for overlapping ranges
             const hasOverlap = await BundleRepo.checkRangeOverlap(
-                client, 
-                cuttingEntry.style_id, 
-                cuttingEntry.colour_code, 
-                startingNo, 
+                client,
+                cuttingEntry.style_id,
+                cuttingEntry.colour_code,
+                startingNo,
                 endingNo
             );
             if (hasOverlap) {
@@ -173,7 +173,7 @@ class BundleService {
             `;
             const availableResult = await client.query(availableQuery, [cuttingId]);
             const availableQty = parseInt(availableResult.rows[0].available_qty, 10);
-            
+
             if (parseInt(qty) > availableQty) {
                 throw new Error(`Bundle quantity (${qty}) exceeds available quantity (${availableQty})`);
             }
@@ -230,6 +230,43 @@ class BundleService {
         return await BundleRepo.getCuttingEntriesForBundling(orderId, size);
     }
 
+    async getBundleRecords(filters) {
+        return await BundleRepo.getBundleRecords(filters);
+    }
+
+    /**
+     * Delete bundle
+     * @param {number} bundleId - Bundle ID
+     * @param {Object} user - Authenticated user
+     */
+    async deleteBundle(bundleId, user) {
+        // Validate role
+        const isManager = user.permissions && user.permissions.includes('MANAGE_CUTTING');
+        const isAdmin = user.permissions && user.permissions.includes('SYSTEM_ADMIN');
+        if (!isManager && !isAdmin) {
+            throw new Error('Unauthorized');
+        }
+
+        // Check if bundle is used (scanned)
+        const isUsed = await BundleRepo.checkUsage(bundleId);
+        if (isUsed) {
+            throw new Error('Cannot delete: Bundle has already been scanned or processed in production.');
+        }
+
+        const client = await db.pool.connect();
+        try {
+            await client.query('BEGIN');
+            const deleted = await BundleRepo.delete(client, bundleId);
+            await client.query('COMMIT');
+            return deleted;
+        } catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
+        } finally {
+            client.release();
+        }
+    }
+
     /**
      * Update bundle
      * @param {number} bundleId - Bundle ID
@@ -258,6 +295,12 @@ class BundleService {
             throw new Error(`Bundle quantity (${qty}) does not match piece range (${startingNo}-${endingNo} = ${calculatedQty})`);
         }
 
+        // ADDITIONAL CHECK: cannot update if used
+        const isUsed = await BundleRepo.checkUsage(bundleId);
+        if (isUsed) {
+            throw new Error('Cannot update: Bundle has already been scanned or processed in production.');
+        }
+
         const client = await db.pool.connect();
         try {
             await client.query('BEGIN');
@@ -280,13 +323,13 @@ class BundleService {
                 )
             `;
             const overlapResult = await client.query(overlapQuery, [
-                existingBundle.style_id, 
-                existingBundle.colour_code, 
-                bundleId, 
-                startingNo, 
+                existingBundle.style_id,
+                existingBundle.colour_code,
+                bundleId,
+                startingNo,
                 endingNo
             ]);
-            
+
             if (parseInt(overlapResult.rows[0].count, 10) > 0) {
                 throw new Error('Bundle range overlaps with existing bundles');
             }
@@ -301,7 +344,7 @@ class BundleService {
             `;
             const availableResult = await client.query(availableQuery, [existingBundle.cutting_id, bundleId]);
             const availableQty = parseInt(availableResult.rows[0].available_qty, 10) + existingBundle.qty;
-            
+
             if (parseInt(qty) > availableQty) {
                 throw new Error(`Bundle quantity (${qty}) exceeds available quantity (${availableQty})`);
             }

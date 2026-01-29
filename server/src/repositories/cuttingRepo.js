@@ -29,7 +29,7 @@ class CuttingRepository {
             try {
                 // Get order quantities from dynamic table
                 const orderQty = await this.getDynamicOrderQty(tableName, order.order_id);
-                
+
                 // Get cutting quantities (grouped by size)
                 const cutQtyRows = await this.getExistingCuttingQty(order.order_id);
                 const cutQtyMap = {};
@@ -48,23 +48,23 @@ class CuttingRepository {
                 let totalOrderQty = 0;
                 let totalCutQty = 0;
                 let totalBundledQty = 0;
-                
+
                 sizeList.forEach(size => {
                     const lowerSize = size.toLowerCase();
                     const oQty = orderQty ? (parseInt(orderQty[lowerSize], 10) || 0) : 0;
                     const cQty = cutQtyMap[lowerSize] || 0;
                     const bQty = bundledQtyMap[lowerSize] || 0;
-                    
+
                     totalOrderQty += oQty;
                     totalCutQty += cQty;
                     totalBundledQty += bQty;
                 });
-                
+
                 // Calculate BUNDLING completion percentage
                 const bundlingCompletionPercentage = totalCutQty > 0
                     ? parseFloat(((totalBundledQty / totalCutQty) * 100).toFixed(2))
                     : 0;
-                
+
                 // HIDE order only if bundling is 100% complete
                 // SHOW order if bundling < 100% (even if cutting = 100%)
                 if (bundlingCompletionPercentage < 100) {
@@ -72,7 +72,7 @@ class CuttingRepository {
                     const cuttingCompletionPercentage = totalOrderQty > 0
                         ? parseFloat(((totalCutQty / totalOrderQty) * 100).toFixed(2))
                         : 0;
-                    
+
                     filteredOrders.push({
                         ...order,
                         cutting_completion_percentage: cuttingCompletionPercentage,
@@ -88,7 +88,7 @@ class CuttingRepository {
                 });
             }
         }
-        
+
         return filteredOrders;
     }
 
@@ -98,6 +98,7 @@ class CuttingRepository {
             order_id,
             buyer,
             po,
+            q, // Generic search term
             limit = 50,
             offset = 0,
             sort_by = 'order_id',
@@ -113,6 +114,12 @@ class CuttingRepository {
         `;
         const params = [];
         let paramIndex = 1;
+
+        if (q) {
+            query += ` AND (o.style_id ILIKE $${paramIndex} OR o.po ILIKE $${paramIndex} OR o.buyer ILIKE $${paramIndex} OR o.order_id::text ILIKE $${paramIndex})`;
+            params.push(`%${q}%`);
+            paramIndex++;
+        }
 
         if (style_id) {
             query += ` AND o.style_id ILIKE $${paramIndex++}`;
@@ -157,14 +164,22 @@ class CuttingRepository {
 
             // Calculate BUNDLING completion percentage using BundleService logic
             const BundleRepo = require('./bundleRepo');
-            const MasterRepo = require('../repositories/it/masterRepo');
-            const tableName = MasterRepo.getTableNameForCategory(order.size_category_name);
+            const MasterRepo = require('../repositories/it/masterRepo'); // Ensure imported
+            let tableName;
+            try {
+                tableName = MasterRepo.getTableNameForCategory(order.size_category_name);
+            } catch (e) {
+                // If category is invalid, skip intelligent filtering and show the order
+                filteredOrders.push({ ...order, cutting_completion_percentage: 0, bundling_completion_percentage: 0 });
+                continue;
+            }
+
             const sizeList = order.sizes ? order.sizes.split(',').map(s => s.trim()) : [];
 
             try {
                 // Get order quantities from dynamic table
                 const orderQty = await this.getDynamicOrderQty(tableName, order.order_id);
-                
+
                 // Get cutting quantities (grouped by size)
                 const cutQtyRows = await this.getExistingCuttingQty(order.order_id);
                 const cutQtyMap = {};
@@ -183,23 +198,23 @@ class CuttingRepository {
                 let totalOrderQty = 0;
                 let totalCutQty = 0;
                 let totalBundledQty = 0;
-                
+
                 sizeList.forEach(size => {
                     const lowerSize = size.toLowerCase();
                     const oQty = orderQty ? (parseInt(orderQty[lowerSize], 10) || 0) : 0;
                     const cQty = cutQtyMap[lowerSize] || 0;
                     const bQty = bundledQtyMap[lowerSize] || 0;
-                    
+
                     totalOrderQty += oQty;
                     totalCutQty += cQty;
                     totalBundledQty += bQty;
                 });
-                
+
                 // Calculate BUNDLING completion percentage
                 const bundlingCompletionPercentage = totalCutQty > 0
                     ? parseFloat(((totalBundledQty / totalCutQty) * 100).toFixed(2))
                     : 0;
-                
+
                 // HIDE order only if bundling is 100% complete
                 // SHOW order if bundling < 100% (even if cutting = 100%)
                 if (bundlingCompletionPercentage < 100) {
@@ -207,7 +222,7 @@ class CuttingRepository {
                     const cuttingCompletionPercentage = totalOrderQty > 0
                         ? parseFloat(((totalCutQty / totalOrderQty) * 100).toFixed(2))
                         : 0;
-                    
+
                     filteredOrders.push({
                         ...order,
                         cutting_completion_percentage: cuttingCompletionPercentage,
@@ -223,7 +238,7 @@ class CuttingRepository {
                 });
             }
         }
-        
+
         return filteredOrders;
     }
 
@@ -232,7 +247,8 @@ class CuttingRepository {
             style_id,
             order_id,
             buyer,
-            po
+            po,
+            q // Generic search
         } = searchParams;
 
         // Build base query with search filters
@@ -244,6 +260,12 @@ class CuttingRepository {
         `;
         const params = [];
         let paramIndex = 1;
+
+        if (q) {
+            query += ` AND (o.style_id ILIKE $${paramIndex} OR o.po ILIKE $${paramIndex} OR o.buyer ILIKE $${paramIndex} OR o.order_id::text ILIKE $${paramIndex})`;
+            params.push(`%${q}%`);
+            paramIndex++;
+        }
 
         if (style_id) {
             query += ` AND o.style_id ILIKE $${paramIndex++}`;
@@ -279,14 +301,20 @@ class CuttingRepository {
 
             // Calculate BUNDLING completion percentage using BundleService logic
             const BundleRepo = require('./bundleRepo');
-            const MasterRepo = require('../repositories/it/masterRepo');
-            const tableName = MasterRepo.getTableNameForCategory(order.size_category_name);
+            const MasterRepo = require('../repositories/it/masterRepo'); // Ensure imported
+            let tableName;
+            try {
+                tableName = MasterRepo.getTableNameForCategory(order.size_category_name);
+            } catch (e) {
+                filteredCount++;
+                continue;
+            }
             const sizeList = order.sizes ? order.sizes.split(',').map(s => s.trim()) : [];
 
             try {
                 // Get order quantities from dynamic table
                 const orderQty = await this.getDynamicOrderQty(tableName, order.order_id);
-                
+
                 // Get cutting quantities (grouped by size)
                 const cutQtyRows = await this.getExistingCuttingQty(order.order_id);
                 const cutQtyMap = {};
@@ -305,23 +333,23 @@ class CuttingRepository {
                 let totalOrderQty = 0;
                 let totalCutQty = 0;
                 let totalBundledQty = 0;
-                
+
                 sizeList.forEach(size => {
                     const lowerSize = size.toLowerCase();
                     const oQty = orderQty ? (parseInt(orderQty[lowerSize], 10) || 0) : 0;
                     const cQty = cutQtyMap[lowerSize] || 0;
                     const bQty = bundledQtyMap[lowerSize] || 0;
-                    
+
                     totalOrderQty += oQty;
                     totalCutQty += cQty;
                     totalBundledQty += bQty;
                 });
-                
+
                 // Calculate BUNDLING completion percentage
                 const bundlingCompletionPercentage = totalCutQty > 0
                     ? parseFloat(((totalBundledQty / totalCutQty) * 100).toFixed(2))
                     : 0;
-                
+
                 // HIDE order only if bundling is 100% complete
                 // SHOW order if bundling < 100% (even if cutting = 100%)
                 if (bundlingCompletionPercentage < 100) {
@@ -332,7 +360,7 @@ class CuttingRepository {
                 filteredCount++;
             }
         }
-        
+
         return filteredCount;
     }
 
@@ -425,6 +453,65 @@ class CuttingRepository {
             : 0;
 
         return stats;
+    }
+
+    // --- Record Management Methods ---
+
+    async getCuttingRecords(filters = {}) {
+        let query = `
+            SELECT c.*, o.buyer, o.style_id as order_style_id
+            FROM cutting c
+            JOIN orders o ON c.order_id = o.order_id::text
+            WHERE 1=1
+        `;
+        const params = [];
+        let paramIndex = 1;
+
+        if (filters.styleId) {
+            query += ` AND (c.style_id ILIKE $${paramIndex} OR o.style_id ILIKE $${paramIndex})`;
+            params.push(`%${filters.styleId}%`);
+            paramIndex++;
+        }
+
+        if (filters.orderId) {
+            query += ` AND c.order_id = $${paramIndex}`;
+            params.push(filters.orderId.toString());
+            paramIndex++;
+        }
+
+        if (filters.buyer) {
+            query += ` AND o.buyer ILIKE $${paramIndex}`;
+            params.push(`%${filters.buyer}%`);
+            paramIndex++;
+        }
+
+        query += ` ORDER BY c.created_at DESC, c.lay_no DESC LIMIT 100`;
+
+        const { rows } = await db.query(query, params);
+        return rows;
+    }
+
+    async getCuttingById(id) {
+        const query = `
+            SELECT c.*, o.buyer
+            FROM cutting c
+            JOIN orders o ON c.order_id = o.order_id::text
+            WHERE c.cutting_id = $1
+        `;
+        const { rows } = await db.query(query, [id]);
+        return rows[0];
+    }
+
+    async deleteCutting(id, client = db) {
+        const query = `DELETE FROM cutting WHERE cutting_id = $1 RETURNING *`;
+        const { rows } = await client.query(query, [id]);
+        return rows[0];
+    }
+
+    async updateCuttingQty(id, qty, client = db) {
+        const query = `UPDATE cutting SET qty = $2 WHERE cutting_id = $1 RETURNING *`;
+        const { rows } = await client.query(query, [id, qty]);
+        return rows[0];
     }
 }
 

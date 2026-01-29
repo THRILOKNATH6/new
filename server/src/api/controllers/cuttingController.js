@@ -44,6 +44,36 @@ class CuttingController {
             res.status(400).json({ success: false, message: err.message });
         }
     }
+
+    async getCuttingRecords(req, res) {
+        try {
+            const records = await CuttingService.getCuttingRecords(req.query);
+            res.json({ success: true, data: records });
+        } catch (err) {
+            res.status(500).json({ success: false, message: err.message });
+        }
+    }
+
+    async deleteCutting(req, res) {
+        try {
+            const { id } = req.params;
+            await CuttingService.deleteCutting(id, req.user);
+            res.json({ success: true, message: 'Cutting record deleted successfully' });
+        } catch (err) {
+            res.status(400).json({ success: false, message: err.message });
+        }
+    }
+
+    async updateCutting(req, res) {
+        try {
+            const { id } = req.params;
+            const { qty } = req.body;
+            await CuttingService.updateCutting(id, parseInt(qty || 0), req.user);
+            res.json({ success: true, message: 'Cutting record updated successfully' });
+        } catch (err) {
+            res.status(400).json({ success: false, message: err.message });
+        }
+    }
 }
 
 module.exports = new CuttingController();

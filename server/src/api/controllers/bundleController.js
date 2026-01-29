@@ -138,6 +138,45 @@ class BundleController {
             });
         }
     }
+
+    /**
+     * Get all bundle records with filters
+     * GET /api/cutting/bundles/records
+     */
+    async getBundleRecords(req, res) {
+        try {
+            const records = await BundleService.getBundleRecords(req.query);
+            res.status(200).json({
+                success: true,
+                data: records
+            });
+        } catch (error) {
+            res.status(500).json({
+                success: false,
+                message: error.message
+            });
+        }
+    }
+
+    /**
+     * Delete bundle
+     * DELETE /api/cutting/bundles/:bundleId
+     */
+    async deleteBundle(req, res) {
+        try {
+            const { bundleId } = req.params;
+            await BundleService.deleteBundle(bundleId, req.user);
+            res.status(200).json({
+                success: true,
+                message: 'Bundle deleted successfully'
+            });
+        } catch (error) {
+            res.status(400).json({
+                success: false,
+                message: error.message
+            });
+        }
+    }
 }
 
 module.exports = new BundleController();

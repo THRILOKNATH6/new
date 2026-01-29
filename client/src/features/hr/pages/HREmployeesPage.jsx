@@ -2,6 +2,7 @@ import { useState } from 'react';
 import EmployeeList from '../components/EmployeeList';
 import HRStats from '../components/HRStats';
 import { HRDepartments, HRDesignations } from '../components/HRMasters';
+import HRMappingManager from '../components/HRMappingManager';
 
 export default function HREmployeesPage() {
     const [activeTab, setActiveTab] = useState('employees');
@@ -10,6 +11,7 @@ export default function HREmployeesPage() {
         { id: 'employees', label: 'Employees' },
         { id: 'departments', label: 'Departments' },
         { id: 'designations', label: 'Designations' },
+        { id: 'governance', label: 'Governance' },
     ];
 
     return (
@@ -39,10 +41,11 @@ export default function HREmployeesPage() {
             {/* CONTENT */}
             <div className="mt-1">
                 {activeTab === 'employees' && <EmployeeList />}
-                {(activeTab === 'departments' || activeTab === 'designations') && (
+                {(activeTab === 'departments' || activeTab === 'designations' || activeTab === 'governance') && (
                     <div className="op-card">
                         {activeTab === 'departments' && <HRDepartments />}
                         {activeTab === 'designations' && <HRDesignations />}
+                        {activeTab === 'governance' && <HRMappingManager />}
                     </div>
                 )}
             </div>

@@ -1,29 +1,36 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, FileText, ChevronRight, Filter } from 'lucide-react';
+import { Search, FileText, ChevronRight, Filter, Scissors, Package, List } from 'lucide-react';
 import cuttingService from '../api/cuttingService';
 import AdvancedSearchModal from '../components/AdvancedSearchModal';
+import CuttingJournal from '../components/CuttingJournal';
+import BundleJournal from '../components/BundleJournal';
 
 const CuttingDashboardPage = () => {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
+    const [activeTab, setActiveTab] = useState('orders'); // 'orders', 'cutting-logs', 'bundle-logs'
     const navigate = useNavigate();
 
     useEffect(() => {
-        const fetchOrders = async () => {
-            try {
-                const res = await cuttingService.getOrders();
-                setOrders(res.data);
-            } catch (err) {
-                console.error('Failed to fetch orders:', err);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchOrders();
-    }, []);
+        if (activeTab === 'orders') {
+            fetchOrders();
+        }
+    }, [activeTab]);
+
+    const fetchOrders = async () => {
+        try {
+            setLoading(true);
+            const res = await cuttingService.getOrders();
+            setOrders(res.data);
+        } catch (err) {
+            console.error('Failed to fetch orders:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const filteredOrders = orders.filter(o =>
         o.order_id.toString().includes(searchTerm) ||
@@ -35,102 +42,148 @@ const CuttingDashboardPage = () => {
         navigate(`/dashboard/production/cutting/${order.order_id}`);
     };
 
-    if (loading) return <div className="p-8 text-center text-slate-500 font-bold">Loading available orders...</div>;
-
     return (
         <div className="flex flex-col gap-4">
             <header className="flex justify-between items-end">
                 <div>
-                    <h1 className="text-[14px] font-black text-slate-800 uppercase tracking-tight">Cutting Module</h1>
-                    <p className="text-[11px] text-slate-500 font-medium uppercase tracking-wider">Select an order to record cutting entries</p>
+                    <h1 className="text-[14px] font-black text-slate-800 uppercase tracking-tight">Cutting room command</h1>
+                    <p className="text-[11px] text-slate-500 font-medium uppercase tracking-wider">
+                        {activeTab === 'orders' ? 'Monitor production batches and initiate new entries' :
+                            activeTab === 'cutting-logs' ? 'Audit and manage historical cutting records' :
+                                'Oversee and manage generated bundles'}
+                    </p>
                 </div>
             </header>
 
-            <div className="flex gap-2">
-                <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                    <input
-                        type="text"
-                        placeholder="Search by Order ID, Buyer, or Style..."
-                        className="w-full bg-white border border-slate-300 rounded py-2 pl-10 pr-4 text-[12px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 transition-none"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                </div>
+            {/* TAB NAVIGATION */}
+            <div className="flex gap-1 border-b border-slate-300">
                 <button
-                    onClick={() => setShowAdvancedSearch(true)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center gap-2 text-[12px] font-medium"
+                    onClick={() => setActiveTab('orders')}
+                    className={`flex items-center gap-2 px-6 py-2.5 text-[11px] font-black uppercase tracking-[0.1em] transition-none ${activeTab === 'orders'
+                        ? 'bg-white border-x border-t border-slate-300 border-b-white -mb-[1px] text-blue-600'
+                        : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+                        }`}
                 >
-                    <Filter size={14} />
-                    Advanced Search
+                    <List size={14} />
+                    Active Orders
+                </button>
+                <button
+                    onClick={() => setActiveTab('cutting-logs')}
+                    className={`flex items-center gap-2 px-6 py-2.5 text-[11px] font-black uppercase tracking-[0.1em] transition-none ${activeTab === 'cutting-logs'
+                        ? 'bg-white border-x border-t border-slate-300 border-b-white -mb-[1px] text-blue-600'
+                        : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+                        }`}
+                >
+                    <Scissors size={14} />
+                    Cutting Journal
+                </button>
+                <button
+                    onClick={() => setActiveTab('bundle-logs')}
+                    className={`flex items-center gap-2 px-6 py-2.5 text-[11px] font-black uppercase tracking-[0.1em] transition-none ${activeTab === 'bundle-logs'
+                        ? 'bg-white border-x border-t border-slate-300 border-b-white -mb-[1px] text-blue-600'
+                        : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+                        }`}
+                >
+                    <Package size={14} />
+                    Bundle Journal
                 </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                {filteredOrders.length > 0 ? (
-                    filteredOrders.map((order) => (
-                        <div
-                            key={order.order_id}
-                            onClick={() => navigate(`/dashboard/production/cutting/${order.order_id}`)}
-                            className="op-card hover:border-blue-500 transition-none cursor-pointer group relative"
+            {/* TAB CONTENT */}
+            {activeTab === 'orders' ? (
+                <div className="space-y-4">
+                    <div className="flex gap-2">
+                        <div className="relative flex-1">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                            <input
+                                type="text"
+                                placeholder="Search by Order ID, Buyer, or Style..."
+                                className="w-full bg-white border border-slate-300 rounded py-2 pl-10 pr-4 text-[12px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 transition-none"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                            />
+                        </div>
+                        <button
+                            onClick={() => setShowAdvancedSearch(true)}
+                            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center gap-2 text-[12px] font-medium"
                         >
-                            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <ChevronRight className="text-blue-600" size={16} />
-                            </div>
+                            <Filter size={14} />
+                            Advanced Search
+                        </button>
+                    </div>
 
-                            <div className="flex items-center gap-3 mb-3">
-                                <div className="p-2 bg-blue-50 border border-blue-100 rounded text-blue-600">
-                                    <FileText size={18} />
-                                </div>
-                                <div>
-                                    <p className="text-[9px] text-slate-400 font-bold uppercase leading-none mb-1">Order ID</p>
-                                    <h3 className="text-[14px] font-black text-slate-800">#{order.order_id}</h3>
-                                </div>
-                            </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                        {loading && orders.length === 0 ? (
+                            <div className="col-span-full p-20 text-center text-slate-400 font-bold uppercase tracking-widest text-[11px]">Synchronizing Active Orders...</div>
+                        ) : filteredOrders.length > 0 ? (
+                            filteredOrders.map((order) => (
+                                <div
+                                    key={order.order_id}
+                                    onClick={() => navigate(`/dashboard/production/cutting/${order.order_id}`)}
+                                    className="op-card hover:border-blue-500 transition-none cursor-pointer group relative"
+                                >
+                                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <ChevronRight className="text-blue-600" size={16} />
+                                    </div>
 
-                            <div className="space-y-1.5">
-                                <div className="flex justify-between text-[11px]">
-                                    <span className="text-slate-400 font-bold uppercase">Buyer</span>
-                                    <span className="text-slate-800 font-black">{order.buyer}</span>
-                                </div>
-                                <div className="flex justify-between text-[11px]">
-                                    <span className="text-slate-400 font-bold uppercase">Style</span>
-                                    <span className="text-slate-800 font-black">{order.style_id}</span>
-                                </div>
-                                <div className="flex justify-between text-[11px]">
-                                    <span className="text-slate-400 font-bold uppercase">Color</span>
-                                    <span className="text-slate-800 font-black">{order.colour_code}</span>
-                                </div>
-                                <div className="pt-2 border-t border-slate-200 flex justify-between items-center">
-                                    <span className="text-[10px] text-slate-400 font-bold uppercase">Total Qty</span>
-                                    <span className="text-slate-800 font-black text-[13px]">{order.order_quantity}</span>
-                                </div>
-                                {order.cutting_completion_percentage !== undefined && (
-                                    <div className="pt-1 border-t border-slate-200 flex justify-between items-center">
-                                        <span className="text-[10px] text-slate-400 font-bold uppercase">Cutting</span>
-                                        <div className="flex items-center gap-2">
-                                            <span className={`text-[13px] font-black ${
-                                                order.cutting_completion_percentage >= 100 ? 'text-green-600' : 'text-blue-600'
-                                            }`}>
-                                                {order.cutting_completion_percentage}%
-                                            </span>
-                                            {order.cutting_completion_percentage >= 100 && (
-                                                <span className="px-2 py-0.5 bg-green-100 text-green-700 text-[10px] font-bold rounded-full">
-                                                    Complete
-                                                </span>
-                                            )}
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <div className="p-2 bg-blue-50 border border-blue-100 rounded text-blue-600">
+                                            <FileText size={18} />
+                                        </div>
+                                        <div>
+                                            <p className="text-[9px] text-slate-400 font-bold uppercase leading-none mb-1">Order ID</p>
+                                            <h3 className="text-[14px] font-black text-slate-800">#{order.order_id}</h3>
                                         </div>
                                     </div>
-                                )}
+
+                                    <div className="space-y-1.5">
+                                        <div className="flex justify-between text-[11px]">
+                                            <span className="text-slate-400 font-bold uppercase">Buyer</span>
+                                            <span className="text-slate-800 font-black">{order.buyer}</span>
+                                        </div>
+                                        <div className="flex justify-between text-[11px]">
+                                            <span className="text-slate-400 font-bold uppercase">Style</span>
+                                            <span className="text-slate-800 font-black">{order.style_id}</span>
+                                        </div>
+                                        <div className="flex justify-between text-[11px]">
+                                            <span className="text-slate-400 font-bold uppercase">Color</span>
+                                            <span className="text-slate-800 font-black">{order.colour_code}</span>
+                                        </div>
+                                        <div className="pt-2 border-t border-slate-200 flex justify-between items-center">
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase">Total Qty</span>
+                                            <span className="text-slate-800 font-black text-[13px]">{order.order_quantity}</span>
+                                        </div>
+                                        {order.cutting_completion_percentage !== undefined && (
+                                            <div className="pt-1 border-t border-slate-200 flex justify-between items-center">
+                                                <span className="text-[10px] text-slate-400 font-bold uppercase">Cutting</span>
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`text-[13px] font-black ${order.cutting_completion_percentage >= 100 ? 'text-green-600' : 'text-blue-600'
+                                                        }`}>
+                                                        {order.cutting_completion_percentage}%
+                                                    </span>
+                                                    {order.cutting_completion_percentage >= 100 && (
+                                                        <span className="px-2 py-0.5 bg-green-100 text-green-700 text-[10px] font-bold rounded-full">
+                                                            Complete
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="col-span-full py-20 text-center text-slate-400 bg-slate-50 rounded border border-dashed border-slate-300">
+                                {searchTerm ? 'No orders match your search query.' : 'No orders available for cutting.'}
                             </div>
-                        </div>
-                    ))
-                ) : (
-                    <div className="col-span-full py-20 text-center text-slate-400 bg-slate-50 rounded border border-dashed border-slate-300">
-                        {searchTerm ? 'No orders match your search query.' : 'No orders available for cutting.'}
+                        )}
                     </div>
-                )}
-            </div>
+                </div>
+            ) : activeTab === 'cutting-logs' ? (
+                <CuttingJournal />
+            ) : (
+                <BundleJournal />
+            )}
 
             {/* Advanced Search Modal */}
             <AdvancedSearchModal

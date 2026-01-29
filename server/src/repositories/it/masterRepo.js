@@ -101,17 +101,24 @@ class MasterRepository {
      */
     async ensureLoadingTable(client, tableName, sizes) {
         // tableName: loading_{X}
-        // 1. Create base table
+        // 1. Create base table with transaction and audit support
         const query = `
             CREATE TABLE IF NOT EXISTS "${tableName}" (
-                order_id integer NOT NULL,
-                line_no integer NOT NULL,
-                PRIMARY KEY (order_id, line_no)
+                loading_id SERIAL PRIMARY KEY,
+                order_id integer NOT NULL REFERENCES orders(order_id) ON DELETE CASCADE,
+                line_no integer NOT NULL REFERENCES lines(line_no) ON DELETE CASCADE,
+                created_by VARCHAR(20) REFERENCES employees(emp_id),
+                approved_by VARCHAR(20) REFERENCES employees(emp_id),
+                handover_by VARCHAR(20) REFERENCES employees(emp_id),
+                approved_status VARCHAR(20) DEFAULT 'PENDING_APPROVAL',
+                created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                approved_date TIMESTAMP,
+                handover_date TIMESTAMP
             )
         `;
         await client.query(query);
 
-        // 2. Idempotent Size Column Management
+        // 2. Idempotent Column Management for dynamic sizes
         for (const size of sizes) {
             const sanitizedSize = size.toLowerCase().trim();
             if (!sanitizedSize) continue;
@@ -126,6 +133,11 @@ class MasterRepository {
                 await client.query(`ALTER TABLE "${tableName}" ADD COLUMN "${sanitizedSize}" INTEGER DEFAULT 0`);
             }
         }
+
+        // 3. Performance Indexes
+        await client.query(`CREATE INDEX IF NOT EXISTS "idx_loading_line_${tableName}" ON "${tableName}" (line_no)`);
+        await client.query(`CREATE INDEX IF NOT EXISTS "idx_loading_order_${tableName}" ON "${tableName}" (order_id)`);
+        await client.query(`CREATE INDEX IF NOT EXISTS "idx_loading_status_${tableName}" ON "${tableName}" (approved_status)`);
     }
 
     // --- Style ---

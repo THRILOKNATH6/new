@@ -35,3 +35,24 @@ export const createDesignation = async (masterData) => {
     const { data } = await apiClient.post('/hr/designations', masterData);
     return data;
 };
+
+// Mappings
+export const getMappings = async () => {
+    const { data } = await apiClient.get('/hr/mappings');
+    return data;
+};
+
+export const getDesignationsByDept = async (deptId) => {
+    const { data } = await apiClient.get(`/hr/departments/${deptId}/designations`);
+    return data;
+};
+
+export const addMapping = async (mappingData) => {
+    const { data } = await apiClient.post('/hr/mappings', mappingData);
+    return data;
+};
+
+export const removeMapping = async (departmentId, designationId) => {
+    const { data } = await apiClient.delete(`/hr/mappings/${departmentId}/${designationId}`);
+    return data;
+};

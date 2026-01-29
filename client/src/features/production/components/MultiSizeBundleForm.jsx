@@ -27,19 +27,20 @@ const MultiSizeBundleForm = ({ orderId, styleId, colourCode, onSuccess, onCancel
         try {
             // Get bundle statistics for all sizes
             const statsResponse = await bundleService.getBundleStats(orderId);
-            setBundleStats(statsResponse.data);
+            const stats = statsResponse.data.data;
+            setBundleStats(stats);
 
             // Get next bundle number for range calculation
             try {
                 const nextNumberResponse = await bundleService.getNextBundleNumber(styleId, colourCode);
-                setStartingNumber(nextNumberResponse.data.nextStartingNumber);
+                setStartingNumber(nextNumberResponse.data.data.nextStartingNumber);
             } catch (err) {
                 // If no existing bundles, start from 1
                 setStartingNumber(1);
             }
 
             // Get available cutting entries for sizes with available quantity
-            const sizesWithAvailability = statsResponse.data.sizes.filter(
+            const sizesWithAvailability = stats.sizes.filter(
                 size => size.availableForBundling > 0
             );
 
@@ -56,10 +57,6 @@ const MultiSizeBundleForm = ({ orderId, styleId, colourCode, onSuccess, onCancel
             setAvailableEntries(entriesData);
 
             // Calculate summary statistics for advanced options
-            const totalAvailable = sizesWithAvailability.reduce((sum, size) => 
-                sum + (size.availableForBundling || 0), 0
-            );
-            const totalSizes = sizesWithAvailability.length;
         } catch (err) {
             console.error('Failed to fetch initial data:', err);
             setErrors({ general: err.response?.data?.message || 'Failed to load bundling data' });
@@ -73,7 +70,7 @@ const MultiSizeBundleForm = ({ orderId, styleId, colourCode, onSuccess, onCancel
             ...prev,
             [data.size]: data
         }));
-        
+
         // Clear errors for this size when data changes
         if (errors[data.size]) {
             setErrors(prev => {
@@ -118,20 +115,24 @@ const MultiSizeBundleForm = ({ orderId, styleId, colourCode, onSuccess, onCancel
             if (autoCalculateRanges) {
                 const allBundles = Object.entries(sizeData)
                     .filter(([sizeName, data]) => data.bundleQty && data.bundleQty > 0)
-                    .map(([sizeName, data]) => data);
+                    .map(([sizeName, data]) => ({ size: sizeName, ...data }));
 
                 let prevEndingNo = null;
                 for (let i = 0; i < allBundles.length; i++) {
-                    const [currentSize, currentData] = allBundles[i];
+                    const currentData = allBundles[i];
+
                     if (i > 0) {
-                        const [prevSize, prevData] = allBundles[i - 1];
-                        if (prevSize && prevData.endingNo) {
+                        const prevData = allBundles[i - 1];
+                        if (prevData.endingNo) {
                             prevEndingNo = prevData.endingNo;
                         }
                     }
 
                     if (prevEndingNo && currentData.startingNo !== prevEndingNo + 1) {
-                        sizeErrors.bundleQty = `Bundle ranges must be continuous. Expected start: ${prevEndingNo + 1}, got: ${currentData.startingNo}`;
+                        validationErrors[currentData.size] = {
+                            ...validationErrors[currentData.size],
+                            bundleQty: `Bundle ranges must be continuous. Expected start: ${prevEndingNo + 1}, got: ${currentData.startingNo}`
+                        };
                     }
                 }
             }
@@ -192,7 +193,7 @@ const MultiSizeBundleForm = ({ orderId, styleId, colourCode, onSuccess, onCancel
                     const response = await bundleService.createBundle(bundleData);
                     createdBundles.push({
                         ...bundle,
-                        bundleId: response.data.data.bundleId,
+                        bundleId: response.data.data.bundle_id,
                         actualStartingNo: currentStartNumber,
                         actualEndingNo: currentStartNumber + bundle.qty - 1
                     });
@@ -215,7 +216,7 @@ const MultiSizeBundleForm = ({ orderId, styleId, colourCode, onSuccess, onCancel
             } else {
                 setSuccess(`Successfully created ${createdBundles.length} bundles`);
                 onSuccess && onSuccess(createdBundles);
-                
+
                 // Reset form after successful submission
                 setTimeout(() => {
                     setSizeData({});
@@ -258,7 +259,7 @@ const MultiSizeBundleForm = ({ orderId, styleId, colourCode, onSuccess, onCancel
                 const newData = {};
                 sizesWithAvailability.forEach(size => {
                     newData[size.size] = {
-                        bundleQty: Math.min(size.availableForBundling, 
+                        bundleQty: Math.min(size.availableForBundling,
                             availableEntries[size.size]?.[0]?.available_qty || size.availableForBundling),
                         cuttingId: availableEntries[size.size]?.[0]?.cutting_id || '',
                         balance: 0,
@@ -279,7 +280,7 @@ const MultiSizeBundleForm = ({ orderId, styleId, colourCode, onSuccess, onCancel
                     .reduce((sum, data) => sum + (parseInt(data.bundleQty) || 0), 0);
                 const availableSizes = sizesWithAvailability.map(size => size.size);
                 const avgQtyPerSize = Math.floor(totalBundleQty / availableSizes.length);
-                
+
                 const distributedData = {};
                 availableSizes.forEach(size => {
                     const sizeInfo = sizesWithAvailability.find(s => s.size === size.size);
@@ -328,6 +329,12 @@ const MultiSizeBundleForm = ({ orderId, styleId, colourCode, onSuccess, onCancel
     const sizesWithAvailability = bundleStats.sizes.filter(
         size => size.availableForBundling > 0
     );
+
+    const summaryStats = {
+        totalAvailable: sizesWithAvailability.reduce((sum, size) => sum + (size.availableForBundling || 0), 0),
+        totalSizes: sizesWithAvailability.length
+    };
+    const { totalAvailable, totalSizes } = summaryStats;
 
     if (sizesWithAvailability.length === 0) {
         return (
@@ -456,16 +463,25 @@ const MultiSizeBundleForm = ({ orderId, styleId, colourCode, onSuccess, onCancel
                             </tr>
                         </thead>
                         <tbody>
-                            {sizesWithAvailability.map(size => (
-                                <BundleSizeRow
-                                    key={size.size}
-                                    size={size}
-                                    availableEntries={availableEntries[size.size]}
-                                    onDataChange={handleSizeDataChange}
-                                    errors={errors[size.size] || {}}
-                                    startingNumber={startingNumber}
-                                />
-                            ))}
+                            {(() => {
+                                let currentOffset = 0;
+                                return sizesWithAvailability.map(size => {
+                                    const rowStartingNo = startingNumber + currentOffset;
+                                    const sizeQty = parseInt(sizeData[size.size]?.bundleQty) || 0;
+                                    currentOffset += sizeQty;
+
+                                    return (
+                                        <BundleSizeRow
+                                            key={size.size}
+                                            size={size}
+                                            availableEntries={availableEntries[size.size]}
+                                            onDataChange={handleSizeDataChange}
+                                            errors={errors[size.size] || {}}
+                                            startingNumber={rowStartingNo}
+                                        />
+                                    );
+                                });
+                            })()}
                         </tbody>
                         <tfoot>
                             <tr className="bg-slate-50 border-t-2 border-slate-300">

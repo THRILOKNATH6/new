@@ -1,4 +1,4 @@
-import { Home, Users, Scissors, Settings, Activity, FileText, Target } from 'lucide-react';
+import { Home, Users, Scissors, Settings, Activity, FileText, Target, Truck } from 'lucide-react';
 
 export const MENU_ITEMS = [
     {
@@ -55,6 +55,12 @@ export const MENU_ITEMS = [
         path: '/dashboard/production/cutting',
         icon: Scissors,
         requiredPermission: 'MANAGE_CUTTING'
+    },
+    {
+        label: 'Supermarket',
+        path: '/dashboard/production/supermarket',
+        icon: Truck,
+        requiredPermission: 'MANAGE_SUPERMARKET'
     },
     {
         label: 'Reports',

@@ -10,13 +10,13 @@ class CuttingService {
     async searchOrders(searchParams) {
         // Validate and sanitize search parameters
         const validatedParams = this.validateSearchParams(searchParams);
-        
+
         // Execute search with pagination
         const [orders, totalCount] = await Promise.all([
             CuttingRepo.searchOrders(validatedParams),
             CuttingRepo.getOrdersCount(validatedParams)
         ]);
-        
+
         return {
             orders,
             pagination: {
@@ -36,37 +36,43 @@ class CuttingService {
 
     validateSearchParams(searchParams) {
         const validated = { ...searchParams };
-        
+
         // Convert and validate numeric parameters
         validated.limit = Math.min(parseInt(searchParams.limit) || 50, 200);
         validated.limit = Math.max(validated.limit, 1);
         validated.offset = Math.max(parseInt(searchParams.offset) || 0, 0);
-        validated.order_id = searchParams.order_id ? parseInt(searchParams.order_id) : undefined;
-        
-        // Validate order_id if provided
-        if (validated.order_id && (isNaN(validated.order_id) || validated.order_id <= 0)) {
-            throw new Error('order_id must be a positive integer');
+
+        // Smart Search Logic: 
+        // If order_id is provided but is NOT a number, treat it as a generic search string (Style/PO)
+        if (searchParams.order_id && isNaN(parseInt(searchParams.order_id))) {
+            const query = searchParams.order_id;
+            validated.q = query; // New Generic Search param
+            delete validated.order_id; // Remove invalid numeric order_id
+        } else if (searchParams.order_id) {
+            validated.order_id = parseInt(searchParams.order_id);
+            if (validated.order_id <= 0) delete validated.order_id;
         }
-        
+
         // Allowed sort fields
         const allowedSortFields = ['order_id', 'buyer', 'brand', 'style_id', 'po'];
-        validated.sort_by = allowedSortFields.includes(searchParams.sort_by) 
-            ? searchParams.sort_by 
+        validated.sort_by = allowedSortFields.includes(searchParams.sort_by)
+            ? searchParams.sort_by
             : 'order_id';
-        
+
         validated.sort_order = searchParams.sort_order?.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
-        
+
         // String length validation
         if (validated.style_id && validated.style_id.length > 50) {
-            throw new Error('style_id must be 50 characters or less');
+            // Truncate instead of throw for better UX
+            validated.style_id = validated.style_id.substring(0, 50);
         }
         if (validated.buyer && validated.buyer.length > 100) {
-            throw new Error('buyer must be 100 characters or less');
+            validated.buyer = validated.buyer.substring(0, 100);
         }
         if (validated.po && validated.po.length > 50) {
-            throw new Error('po must be 50 characters or less');
+            validated.po = validated.po.substring(0, 50);
         }
-        
+
         return validated;
     }
 
@@ -165,6 +171,81 @@ class CuttingService {
         } catch (err) {
             await client.query('ROLLBACK');
             throw err;
+        } finally {
+            client.release();
+        }
+    }
+
+    async getCuttingRecords(filters) {
+        return await CuttingRepo.getCuttingRecords(filters);
+    }
+
+    async deleteCutting(id, user) {
+        // Validate role
+        const isManager = user.permissions && user.permissions.includes('MANAGE_CUTTING');
+        const isAdmin = user.permissions && user.permissions.includes('SYSTEM_ADMIN');
+        if (!isManager && !isAdmin) {
+            throw new Error('Unauthorized');
+        }
+
+        // Check dependencies (Bundles)
+        const client = await db.pool.connect();
+        try {
+            await client.query('BEGIN');
+
+            const BundleRepo = require('../repositories/bundleRepo');
+            const bundles = await BundleRepo.getByCuttingId(client, id);
+            if (bundles && bundles.length > 0) {
+                throw new Error(`Cannot delete cutting record: ${bundles.length} bundles are already linked to this entry.`);
+            }
+
+            const deleted = await CuttingRepo.deleteCutting(id, client);
+            await client.query('COMMIT');
+            return deleted;
+        } catch (err) {
+            await client.query('ROLLBACK');
+            throw err;
+        } finally {
+            client.release();
+        }
+    }
+
+    async updateCutting(id, newQty, user) {
+        // Validate role
+        const isManager = user.permissions && user.permissions.includes('MANAGE_CUTTING');
+        const isAdmin = user.permissions && user.permissions.includes('SYSTEM_ADMIN');
+        if (!isManager && !isAdmin) {
+            throw new Error('Unauthorized');
+        }
+
+        const cutting = await CuttingRepo.getCuttingById(id);
+        if (!cutting) throw new Error('Cutting record not found');
+
+        // Check if bundled qty exceeds new qty
+        const client = await db.pool.connect();
+        try {
+            const BundleRepo = require('../repositories/bundleRepo');
+            const bundles = await BundleRepo.getByCuttingId(client, id);
+            const totalBundled = bundles.reduce((sum, b) => sum + b.qty, 0);
+
+            if (newQty < totalBundled) {
+                throw new Error(`Cannot reduce quantity below bundled total (${totalBundled} PCS).`);
+            }
+
+            // Check order limits
+            const order = await CuttingRepo.getOrderWithSizes(cutting.order_id);
+            const tableName = MasterRepo.getTableNameForCategory(order.size_category_name);
+            const sizeList = order.sizes ? order.sizes.split(',').map(s => s.trim()) : [];
+            const stats = await CuttingRepo.getAggregateStats(cutting.order_id, tableName, sizeList);
+
+            const sizeInfo = stats.sizes.find(s => s.size.toLowerCase() === cutting.size.toLowerCase());
+            const otherLaysTotal = sizeInfo.cutQty - cutting.qty;
+
+            if (otherLaysTotal + newQty > sizeInfo.orderQty) {
+                throw new Error(`Update exceeds order limit for size ${cutting.size}. Max allowed: ${sizeInfo.orderQty - otherLaysTotal}`);
+            }
+
+            return await CuttingRepo.updateCuttingQty(id, newQty);
         } finally {
             client.release();
         }

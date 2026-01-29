@@ -28,9 +28,21 @@ router.get('/orders/:id', requirePermission('VIEW_ORDERS'), CuttingController.ge
 // 3. Add / Update cutting entries against an order
 router.post('/orders/:id/cutting', requirePermission('MANAGE_CUTTING'), CuttingController.saveCutting);
 
+// 4. Get all cutting records for management (with filters)
+router.get('/records', requirePermission('MANAGE_CUTTING'), CuttingController.getCuttingRecords);
+
+// 5. Update specific cutting record
+router.put('/:id', requirePermission('MANAGE_CUTTING'), CuttingController.updateCutting);
+
+// 6. Delete specific cutting record
+router.delete('/:id', requirePermission('MANAGE_CUTTING'), CuttingController.deleteCutting);
+
 // ============================================================================
 // BUNDLE MANAGEMENT ROUTES
 // ============================================================================
+
+// 0. Get all bundle records for management (with filters)
+router.get('/bundles/records', requirePermission('MANAGE_CUTTING'), BundleController.getBundleRecords);
 
 // 1. Get bundle statistics for an order (order qty, cut qty, bundled qty, available)
 router.get('/:orderId/bundles/stats', requirePermission('MANAGE_CUTTING'), BundleController.getBundleStats);
@@ -49,5 +61,8 @@ router.post('/bundles', requirePermission('MANAGE_CUTTING'), BundleController.cr
 
 // 6. Update an existing bundle
 router.put('/bundles/:bundleId', requirePermission('MANAGE_CUTTING'), BundleController.updateBundle);
+
+// 7. Delete an existing bundle
+router.delete('/bundles/:bundleId', requirePermission('MANAGE_CUTTING'), BundleController.deleteBundle);
 
 module.exports = router;

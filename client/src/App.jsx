@@ -15,6 +15,7 @@ import IEEmployeesPage from '@/features/ie/pages/IEEmployeesPage';
 import IEOperationsPage from '@/features/ie/pages/IEOperationsPage';
 import CuttingDashboardPage from '@/features/production/pages/CuttingDashboardPage';
 import CuttingEntryPage from '@/features/production/pages/CuttingEntryPage';
+import SupermarketDashboard from '@/features/supermarket/pages/SupermarketDashboard';
 import DashboardLayout from '@/features/dashboard/components/DashboardLayout';
 
 // Protected Route Component
@@ -63,6 +64,7 @@ function AppRoutes() {
           {/* Production / Cutting Module */}
           <Route path="production/cutting" element={<CuttingDashboardPage />} />
           <Route path="production/cutting/:id" element={<CuttingEntryPage />} />
+          <Route path="production/supermarket" element={<SupermarketDashboard />} />
 
           <Route path="production" element={<div>Production Module (Coming Soon)</div>} />
           <Route path="machines" element={<div>Machines Module (Coming Soon)</div>} />

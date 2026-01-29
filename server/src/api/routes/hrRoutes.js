@@ -24,4 +24,10 @@ router.post('/departments', requirePermission('MANAGE_EMPLOYEES'), HRController.
 router.get('/designations', requirePermission('VIEW_HR_DATA'), HRController.getDesignations);
 router.post('/designations', requirePermission('MANAGE_EMPLOYEES'), HRController.createDesignation);
 
+// --- Mapping Management ---
+router.get('/mappings', requirePermission('VIEW_HR_DATA'), HRController.getMapping);
+router.get('/departments/:deptId/designations', requirePermission('VIEW_HR_DATA'), HRController.getDesignationsByDept);
+router.post('/mappings', requirePermission('MANAGE_EMPLOYEES'), HRController.addMapping);
+router.delete('/mappings/:departmentId/:designationId', requirePermission('MANAGE_EMPLOYEES'), HRController.removeMapping);
+
 module.exports = router;

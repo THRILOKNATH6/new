@@ -64,6 +64,22 @@ const bundleService = {
      */
     updateBundle: (bundleId, bundleData) => {
         return apiClient.put(`/cutting/bundles/${bundleId}`, bundleData);
+    },
+
+    /**
+     * Get all bundle records for management
+     * @param {Object} filters - Search filters
+     */
+    getRecords: (filters) => {
+        return apiClient.get('/cutting/bundles/records', { params: filters });
+    },
+
+    /**
+     * Delete a bundle
+     * @param {number} bundleId - Bundle ID
+     */
+    deleteBundle: (bundleId) => {
+        return apiClient.delete(`/cutting/bundles/${bundleId}`);
     }
 };
 
